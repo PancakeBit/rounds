@@ -7,7 +7,10 @@ import type { StatExpense } from '../core/stats';
 
 export interface Person { id: number; name: string; emoji: string; color: string; archived: boolean }
 export interface NightMember extends Person { photoStart: string | null; photoEnd: string | null }
-export interface Night { id: number; title: string; startedAt: number; endedAt: number | null; groupPhoto: string | null }
+export interface Night {
+  id: number; title: string; startedAt: number; endedAt: number | null;
+  groupPhotoStart: string | null; groupPhoto: string | null; // group shots at the start and the end
+}
 export interface Expense extends StatExpense { id: number; nightId: number; note: string }
 export interface Settlement extends Transfer { id: number; paidAt: number | null }
 export interface ExpenseInput {
@@ -23,7 +26,7 @@ export interface ExpenseInput {
 }
 
 type PersonRow = { id: number; name: string; emoji: string; color: string; archived: number };
-type NightRow = { id: number; title: string; started_at: number; ended_at: number | null; group_photo: string | null };
+type NightRow = { id: number; title: string; started_at: number; ended_at: number | null; group_photo: string | null; group_photo_start: string | null };
 type MemberRow = PersonRow & { photo_start: string | null; photo_end: string | null };
 type ExpenseRow = {
   id: number; night_id: number; payer_id: number; amount_minor: number;
@@ -33,7 +36,9 @@ type ShareRow = { expense_id: number; person_id: number; weight: number; extra_m
 type SettlementRow = { id: number; from_id: number; to_id: number; amount_minor: number; paid_at: number | null };
 
 const toPerson = (r: PersonRow): Person => ({ ...r, archived: r.archived === 1 });
-const toNight = (r: NightRow): Night => ({ id: r.id, title: r.title, startedAt: r.started_at, endedAt: r.ended_at, groupPhoto: r.group_photo });
+const toNight = (r: NightRow): Night => ({
+  id: r.id, title: r.title, startedAt: r.started_at, endedAt: r.ended_at, groupPhotoStart: r.group_photo_start, groupPhoto: r.group_photo,
+});
 
 // People
 
@@ -131,8 +136,9 @@ export async function setMemberPhoto(
   await db.runAsync(`UPDATE night_members SET ${column} = ? WHERE night_id = ? AND person_id = ?`, uri, nightId, personId);
 }
 
-export async function setGroupPhoto(db: SQLiteDatabase, nightId: number, uri: string | null): Promise<void> {
-  await db.runAsync('UPDATE nights SET group_photo = ? WHERE id = ?', uri, nightId);
+export async function setGroupPhoto(db: SQLiteDatabase, nightId: number, phase: 'start' | 'end', uri: string | null): Promise<void> {
+  const column = phase === 'start' ? 'group_photo_start' : 'group_photo';
+  await db.runAsync(`UPDATE nights SET ${column} = ? WHERE id = ?`, uri, nightId);
 }
 
 export async function endNight(db: SQLiteDatabase, id: number): Promise<void> {

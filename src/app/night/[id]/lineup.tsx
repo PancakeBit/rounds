@@ -34,7 +34,8 @@ export default function Lineup() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const photoOf = (m: NightMember) => (phase === 'start' ? m.photoStart : m.photoEnd);
-  const taken = members.filter(photoOf).length + (phase === 'end' && night?.groupPhoto ? 1 : 0);
+  const groupOf = (n: Night | null) => (phase === 'start' ? n?.groupPhotoStart : n?.groupPhoto) ?? null;
+  const taken = members.filter(photoOf).length + (groupOf(night) ? 1 : 0);
 
   async function clear(m: NightMember) {
     const old = photoOf(m);
@@ -48,10 +49,10 @@ export default function Lineup() {
     load();
   }
   async function clearGroup() {
-    const old = night?.groupPhoto;
+    const old = groupOf(night);
     if (!old) return;
     const ok = await guarded("Couldn't clear the group shot", async () => {
-      await setGroupPhoto(db, nightId, null);
+      await setGroupPhoto(db, nightId, phase, null);
       return true;
     });
     if (!ok) return;
@@ -69,7 +70,7 @@ export default function Lineup() {
       <Stack.Screen options={{ title: phase === 'start' ? 'The line-up' : 'One more for the board' }} />
       <Text style={styles.lead}>
         {phase === 'start'
-          ? 'Snap everyone before the first round. Tap a face and pass the phone.'
+          ? 'Snap everyone before the first round. Tap a face and pass the phone, take a group shot, or both.'
           : 'Same faces, a few rounds later. Tap a face, take a group shot, or both.'}
       </Text>
       <View style={styles.grid}>
@@ -87,22 +88,20 @@ export default function Lineup() {
           </Tap>
         ))}
       </View>
-      {phase === 'end' && (
-        <Tap
-          onPress={() => router.push(`/night/${nightId}/snap?group=1`)}
-          onLongPress={clearGroup}
-          accessibilityRole="button"
-          accessibilityLabel={night?.groupPhoto ? 'Retake the group shot' : 'Take a group shot'}
-          accessibilityHint={night?.groupPhoto ? 'Hold to remove it' : undefined}
-          style={styles.group}
-        >
-          {night?.groupPhoto ? (
-            <Image source={{ uri: night.groupPhoto }} style={styles.groupImg} accessibilityIgnoresInvertColors />
-          ) : (
-            <Text style={styles.groupText}>Group shot</Text>
-          )}
-        </Tap>
-      )}
+      <Tap
+        onPress={() => router.push(`/night/${nightId}/snap?group=1&phase=${phase}`)}
+        onLongPress={clearGroup}
+        accessibilityRole="button"
+        accessibilityLabel={groupOf(night) ? 'Retake the group shot' : 'Take a group shot'}
+        accessibilityHint={groupOf(night) ? 'Hold to remove it' : undefined}
+        style={styles.group}
+      >
+        {groupOf(night) ? (
+          <Image source={{ uri: groupOf(night)! }} style={styles.groupImg} accessibilityIgnoresInvertColors />
+        ) : (
+          <Text style={styles.groupText}>Group shot</Text>
+        )}
+      </Tap>
       <Text style={styles.dim}>Tap again to retake · hold a photo to go back to the emoji</Text>
       <Button label={taken > 0 ? 'Done' : 'Skip it'} onPress={done} />
     </ScrollView>

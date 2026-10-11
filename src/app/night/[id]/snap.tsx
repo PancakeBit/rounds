@@ -13,7 +13,7 @@ import { guarded } from '../../../ui/oops';
 import { theme } from '../../../ui/theme';
 
 // /night/[id]/snap?personId=3&phase=start   one face: front camera, chalk circle to aim at
-// /night/[id]/snap?group=1                    the group shot: back camera, full frame
+// /night/[id]/snap?group=1&phase=end          a group shot: back camera, full frame
 export default function Snap() {
   const params = useLocalSearchParams<{ id: string; personId?: string; phase?: string; group?: string }>();
   const nightId = Number(params.id);
@@ -66,9 +66,9 @@ export default function Snap() {
       const data = await getNight(db, nightId);
       if (!data) throw new Error('That night no longer exists');
       if (isGroup) {
-        const uri = await keepPhoto(nightId, { kind: 'group' }, pic.uri);
-        await setGroupPhoto(db, nightId, uri);
-        dropFile(data.night.groupPhoto);
+        const uri = await keepPhoto(nightId, { kind: 'group', phase }, pic.uri);
+        await setGroupPhoto(db, nightId, phase, uri);
+        dropFile(phase === 'start' ? data.night.groupPhotoStart : data.night.groupPhoto);
       } else {
         const m = data.members.find(x => x.id === personId);
         if (!m) throw new Error("They aren't in this night");

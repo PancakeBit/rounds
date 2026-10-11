@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const LATEST = 2;
+const LATEST = 3;
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -88,6 +88,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
         ALTER TABLE expense_shares RENAME COLUMN fixed_minor TO extra_minor;
         UPDATE expense_shares SET weight = 0 WHERE extra_minor IS NOT NULL;
       `);
+    }
+    if (row.user_version < 3) {
+      // v3: a group shot can open the night too. The old group_photo is the end-of-night one.
+      await db.execAsync('ALTER TABLE nights ADD COLUMN group_photo_start TEXT;');
     }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);
   });
