@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Tap } from '../../../ui/Tap';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -96,12 +97,12 @@ export default function Snap() {
         {error && <Text style={styles.error}>{error}</Text>}
         <View style={styles.row}>
           <View style={styles.side} />
-          <Pressable
+          <Tap
             onPress={shoot}
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Take the photo"
-            style={({ pressed }) => [styles.shutter, (pressed || busy) && styles.shutterDown]}
+            style={[styles.shutter, busy && styles.shutterDown]}
           />
           <View style={styles.side}>
             <Button kind="dark" label="Flip" onPress={() => setFacing(f => (f === 'front' ? 'back' : 'front'))} />

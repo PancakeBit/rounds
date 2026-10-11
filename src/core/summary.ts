@@ -27,19 +27,24 @@ export function nightSummary(i: SummaryInput): string {
 
   const who = (e: SummaryExpense): string => {
     if (e.isTreat) return 'on me';
-    const plain = e.shares.every(s => s.fixed == null);
-    if (plain && e.shares.length === 1) return `for ${name(e.shares[0].personId)}`;
-    if (plain && e.shares.length === i.memberIds.length && e.shares.every(s => s.weight === 1)) return 'everyone';
-    return e.shares
-      .map(s => (s.fixed != null ? `${name(s.personId)} ${i.money(s.fixed)}` : s.weight > 1 ? `${name(s.personId)} ×${s.weight}` : name(s.personId)))
-      .join(', ');
+    const extras = e.shares.filter(s => s.extra);
+    const one = (s: ShareInput) => {
+      if (s.weight === 0) return `${name(s.personId)} ${i.money(s.extra ?? 0)}`;
+      const base = s.weight > 1 ? `${name(s.personId)} ×${s.weight}` : name(s.personId);
+      return s.extra ? `${base} +${i.money(s.extra)}` : base;
+    };
+    if (extras.length === 0 && e.shares.length === 1) return `for ${name(e.shares[0].personId)}`;
+    if (e.shares.length === i.memberIds.length && e.shares.every(s => s.weight === 1)) {
+      return ['everyone', ...extras.map(one)].join(', ');
+    }
+    return e.shares.map(one).join(', ');
   };
 
   const total = i.expenses.reduce((sum, e) => sum + e.amount, 0);
   const n = i.expenses.length;
-  const lines = [`${i.title} · ${i.date}`, `Tab: ${i.money(total)} · ${n} ${n === 1 ? 'round' : 'rounds'}`];
+  const lines = [`${i.title} · ${i.date}`, `Tab: ${i.money(total)} · ${n} ${n === 1 ? 'thing' : 'things'} paid for`];
   if (n > 0) {
-    lines.push('', 'Rounds');
+    lines.push('', 'What got paid');
     for (const e of i.expenses) {
       lines.push(`${categoryEmoji(e.category)} ${e.note || categoryLabel(e.category)} ${i.money(e.amount)} · ${name(e.payerId)} paid · ${who(e)}`);
     }

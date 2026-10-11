@@ -12,7 +12,7 @@ import { nightSummary } from '../../../core/summary';
 import {
   getNight, listExpenses, listSettlements, type Expense, type Night, type NightMember, type Settlement,
 } from '../../../db/repo';
-import { useMoney } from '../../../state/settings';
+import { formatMoney as money } from '../../../core/money';
 import { Button } from '../../../ui/Button';
 import { guarded, oops } from '../../../ui/oops';
 import { RecapCard } from '../../../ui/RecapCard';
@@ -23,7 +23,6 @@ export default function Recap() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
-  const money = useMoney();
   const card = useRef<View>(null);
   const [night, setNight] = useState<Night | null>(null);
   const [members, setMembers] = useState<NightMember[]>([]);

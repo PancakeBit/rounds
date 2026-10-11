@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Tap } from '../../../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -7,7 +8,7 @@ import {
   endNight, generateSettlements, getNight, listSettlements, setSettlementPaid,
   type NightMember, type Settlement,
 } from '../../../db/repo';
-import { useMoney } from '../../../state/settings';
+import { formatMoney as money } from '../../../core/money';
 import { Avatar } from '../../../ui/Avatar';
 import { Button } from '../../../ui/Button';
 import { AllSquare, Land, Strike } from '../../../ui/chalk';
@@ -19,7 +20,6 @@ export default function SettleUp() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
-  const money = useMoney();
   const [title, setTitle] = useState('');
   const [members, setMembers] = useState<NightMember[]>([]);
   const [rows, setRows] = useState<Settlement[]>([]);
@@ -133,13 +133,14 @@ export default function SettleUp() {
               const to = byId.get(r.toId);
               const done = r.paidAt != null;
               return (
-                <Pressable
+                <Tap
                   key={r.id}
                   onPress={() => toggle(r)}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: done }}
                   accessibilityLabel={`${from?.name} pays ${to?.name} ${money(r.amount)}`}
                   disabled={ended}
+                  ring={theme.color.accent}
                   style={styles.row}
                 >
                   {from && <Avatar person={from} photo={from.photoStart} size={44} />}
@@ -151,7 +152,7 @@ export default function SettleUp() {
                   <View style={[styles.box, done && styles.boxDone]}>
                     {done && <Text style={styles.tick}>✓</Text>}
                   </View>
-                </Pressable>
+                </Tap>
               );
             })}
           </>

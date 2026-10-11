@@ -1,15 +1,15 @@
 export interface ShareInput {
   personId: number;
   weight: number;
-  fixed?: number | null;
+  extra?: number | null; // added on top of their share: something only they had
 }
 
 export type SplitResult = { ok: true; owed: Map<number, number> } | { ok: false; error: string };
 
 const fail = (error: string): SplitResult => ({ ok: false, error });
 
-// Largest-remainder split. Fixed amounts come off the top; the rest is shared by
-// weight. Leftover minor units go to the largest remainders, ties by list order.
+// Largest-remainder split. Extras come off the top and go to whoever had them; the rest is
+// shared by weight among everyone in. Leftover minor units go to the largest remainders, ties by list order.
 export function splitExpense(amount: number, shares: ShareInput[]): SplitResult {
   if (!Number.isSafeInteger(amount) || amount <= 0) return fail('Amount must be more than zero');
   const seen = new Set<number>();
@@ -17,14 +17,14 @@ export function splitExpense(amount: number, shares: ShareInput[]): SplitResult 
     if (seen.has(s.personId)) return fail('Each person can only appear once');
     seen.add(s.personId);
     if (!Number.isInteger(s.weight) || s.weight < 0) return fail('Shares must be whole numbers, 0 or more');
-    if (s.fixed != null && (!Number.isSafeInteger(s.fixed) || s.fixed < 0)) return fail('Fixed amounts must be 0 or more');
+    if (s.extra != null && (!Number.isSafeInteger(s.extra) || s.extra < 0)) return fail('Extras must be 0 or more');
   }
 
-  const fixedSum = shares.reduce((t, s) => t + (s.fixed ?? 0), 0);
-  if (fixedSum > amount) return fail('Fixed amounts exceed the bill');
-  const rest = amount - fixedSum;
-  const weighted = shares.filter(s => s.fixed == null && s.weight > 0);
-  if (rest > 0 && weighted.length === 0) return fail('Nobody is splitting the rest');
+  const extraSum = shares.reduce((t, s) => t + (s.extra ?? 0), 0);
+  if (extraSum > amount) return fail('Extras add up to more than the bill');
+  const rest = amount - extraSum;
+  const weighted = shares.filter(s => s.weight > 0);
+  if (rest > 0 && weighted.length === 0) return fail('Nobody is sharing the rest');
 
   const totalWeight = weighted.reduce((t, s) => t + s.weight, 0);
   const parts = weighted.map((s, index) => {
@@ -36,8 +36,7 @@ export function splitExpense(amount: number, shares: ShareInput[]): SplitResult 
 
   const owed = new Map<number, number>();
   for (const s of shares) {
-    if (s.fixed != null) owed.set(s.personId, s.fixed);
-    else if (s.weight > 0) owed.set(s.personId, floorOf.get(s.personId)!);
+    if (s.weight > 0 || s.extra) owed.set(s.personId, (s.extra ?? 0) + (floorOf.get(s.personId) ?? 0));
   }
 
   let leftover = rest - parts.reduce((t, p) => t + p.floor, 0);

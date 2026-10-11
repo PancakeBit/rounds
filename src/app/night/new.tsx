@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Tap } from '../../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -65,7 +66,7 @@ export default function NewNight() {
       <Text style={styles.h2}>Who's out?</Text>
       <View style={styles.grid}>
         {crew.map(p => (
-          <Pressable
+          <Tap
             key={p.id}
             onPress={() => toggle(p.id)}
             accessibilityRole="checkbox"
@@ -74,7 +75,7 @@ export default function NewNight() {
             style={[styles.pick, picked.has(p.id) && styles.picked]}
           >
             <Avatar person={p} size={56} showName dimmed={!picked.has(p.id)} />
-          </Pressable>
+          </Tap>
         ))}
       </View>
       {crew.length === 0 && <Text style={styles.dim}>No one in the crew yet. Add a name below.</Text>}

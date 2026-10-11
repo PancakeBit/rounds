@@ -6,23 +6,23 @@ import { theme } from './theme';
 
 interface Props {
   person: { name: string; emoji: string } | null;
-  currency: string;
   initial: number | null;
   onDone: (minor: number | null) => void;
   onClose: () => void;
 }
 
-export function FixedAmountModal({ person, currency, initial, onDone, onClose }: Props) {
+// Something only this person had. It comes off the bill first; everyone in shares the rest.
+export function ExtraModal({ person, initial, onDone, onClose }: Props) {
   const [text, setText] = useState('');
   useEffect(() => {
-    setText(initial != null ? minorToInput(initial, currency) : '');
-  }, [person, initial, currency]);
-  const parsed = parseMoney(text, currency);
+    setText(initial != null ? minorToInput(initial) : '');
+  }, [person, initial]);
+  const parsed = parseMoney(text);
   return (
     <Modal visible={person != null} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>{person?.emoji} {person?.name} pays exactly</Text>
+          <Text style={styles.title}>{person?.emoji} {person?.name}'s extra</Text>
           <TextInput
             autoFocus
             value={text}
@@ -32,10 +32,13 @@ export function FixedAmountModal({ person, currency, initial, onDone, onClose }:
             placeholderTextColor={theme.color.inkDim}
             style={styles.input}
           />
-          <Text style={styles.hint}>Everyone else splits what's left.</Text>
+          <Text style={styles.hint}>
+            What did only they have? It comes off the bill first, then everyone in splits the rest. Set their share to 0 if
+            this is all they had.
+          </Text>
           <View style={styles.row}>
-            <Button kind="ghost" label="No fixed amount" onPress={() => onDone(null)} />
-            <Button label="Set" disabled={parsed == null} onPress={() => onDone(parsed)} />
+            <Button kind="ghost" label="No extra" onPress={() => onDone(null)} />
+            <Button label="Set" disabled={parsed == null} onPress={() => onDone(parsed ? parsed : null)} />
           </View>
         </View>
       </View>

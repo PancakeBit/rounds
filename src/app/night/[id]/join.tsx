@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Tap } from '../../../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -73,10 +74,10 @@ export default function JoinNight() {
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'Add someone' }} />
-      <Text style={styles.lead}>Late to the party? Tap them in. They're in from the next round.</Text>
+      <Text style={styles.lead}>Late to the party? Tap them in. They only share what gets paid from now on.</Text>
       <View style={styles.grid}>
         {candidates.map(p => (
-          <Pressable
+          <Tap
             key={p.id}
             onPress={() => addExisting(p)}
             disabled={busy}
@@ -85,7 +86,7 @@ export default function JoinNight() {
             style={styles.pick}
           >
             <Avatar person={p} size={56} showName />
-          </Pressable>
+          </Tap>
         ))}
       </View>
       {candidates.length === 0 && <Text style={styles.dim}>Everyone's already here.</Text>}

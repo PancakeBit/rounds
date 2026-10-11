@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Tap } from '../../../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -73,7 +74,7 @@ export default function Lineup() {
       </Text>
       <View style={styles.grid}>
         {members.map(m => (
-          <Pressable
+          <Tap
             key={m.id}
             onPress={() => router.push(`/night/${nightId}/snap?personId=${m.id}&phase=${phase}`)}
             onLongPress={() => clear(m)}
@@ -83,11 +84,11 @@ export default function Lineup() {
             style={styles.cell}
           >
             <Avatar person={m} photo={photoOf(m)} size={96} showName />
-          </Pressable>
+          </Tap>
         ))}
       </View>
       {phase === 'end' && (
-        <Pressable
+        <Tap
           onPress={() => router.push(`/night/${nightId}/snap?group=1`)}
           onLongPress={clearGroup}
           accessibilityRole="button"
@@ -100,7 +101,7 @@ export default function Lineup() {
           ) : (
             <Text style={styles.groupText}>Group shot</Text>
           )}
-        </Pressable>
+        </Tap>
       )}
       <Text style={styles.dim}>Tap again to retake · hold a photo to go back to the emoji</Text>
       <Button label={taken > 0 ? 'Done' : 'Skip it'} onPress={done} />

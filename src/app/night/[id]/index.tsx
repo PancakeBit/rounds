@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
@@ -10,20 +10,23 @@ import {
   deleteExpense, getNight, listExpenses, listSettlements, saveExpense,
   type Expense, type ExpenseInput, type Night, type NightMember, type Settlement,
 } from '../../../db/repo';
-import { useMoney } from '../../../state/settings';
+import { formatMoney as money } from '../../../core/money';
 import { Button } from '../../../ui/Button';
 import { Circled, Land, ScoreColumn, Strike } from '../../../ui/chalk';
 import { guarded } from '../../../ui/oops';
 import { Snackbar } from '../../../ui/Snackbar';
+import { Enter, Tap } from '../../../ui/Tap';
 import { theme } from '../../../ui/theme';
 
-const BAR_GAP = 20;
+// The bottom panel: "Someone paid" on top, "Settle up" bottom-most, clear space between them.
+const PANEL_PAD = 12;
+const PANEL_GAP = 16;
+const PANEL_H = PANEL_PAD + theme.tap + PANEL_GAP + theme.tap + PANEL_PAD;
 
 export default function NightScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
-  const money = useMoney();
   const insets = useSafeAreaInsets();
   const [night, setNight] = useState<Night | null>(null);
   const [members, setMembers] = useState<NightMember[]>([]);
@@ -61,14 +64,14 @@ export default function NightScreen() {
   const byId = new Map(members.map(m => [m.id, m]));
   const tab = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-  // Hold to delete: the row gets a chalk strike, then it is wiped and Undo is offered.
+  // Hold to remove: the row gets a chalk strike, then it is wiped and Undo is offered.
   function remove(e: Expense) {
     if (striking != null) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setStriking(e.id);
     timer.current = setTimeout(async () => {
       timer.current = null;
-      const gone = await guarded("Couldn't wipe that round", () => deleteExpense(db, e.id));
+      const gone = await guarded("Couldn't remove that", () => deleteExpense(db, e.id));
       setStriking(null);
       if (gone) setUndo(gone);
       load();
@@ -79,7 +82,7 @@ export default function NightScreen() {
     restoring.current = true;
     const snapshot = undo;
     setUndo(null);
-    const ok = await guarded("Couldn't bring that round back", async () => { await saveExpense(db, snapshot); return true; });
+    const ok = await guarded("Couldn't bring that back", async () => { await saveExpense(db, snapshot); return true; });
     restoring.current = false;
     if (!ok) { setUndo(snapshot); return; }
     load();
@@ -91,7 +94,7 @@ export default function NightScreen() {
       <FlatList
         data={[...expenses].reverse()}
         keyExtractor={e => String(e.id)}
-        contentContainerStyle={[styles.list, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.list, { paddingBottom: (ended ? 80 : PANEL_H + 24) + insets.bottom }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.kicker}>The tab</Text>
@@ -99,7 +102,7 @@ export default function NightScreen() {
               <Text style={styles.tab} numberOfLines={1} adjustsFontSizeToFit>{money(tab)}</Text>
             </Land>
             <Text style={styles.dim}>
-              {expenses.length === 0 ? 'No rounds yet' : `${expenses.length} ${expenses.length === 1 ? 'round' : 'rounds'} on the board`}
+              {expenses.length === 0 ? 'Nothing paid yet' : `${expenses.length} ${expenses.length === 1 ? 'thing' : 'things'} paid for`}
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.board}>
               {members.map((m, i) => (
@@ -107,51 +110,53 @@ export default function NightScreen() {
               ))}
             </ScrollView>
             <View style={styles.actions}>
-              {!ended && <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} style={styles.actionFlex} />}
-              <Button kind="ghost" label="Faces" onPress={() => router.push(`/night/${nightId}/lineup?phase=${ended ? 'end' : 'start'}&then=back`)} />
-              {!ended && <Button kind="ghost" label="Add someone" onPress={() => router.push(`/night/${nightId}/join`)} />}
+              <Button kind="ghost" label="Faces" onPress={() => router.push(`/night/${nightId}/lineup?phase=${ended ? 'end' : 'start'}&then=back`)} style={styles.actionFlex} />
+              {!ended && <Button kind="ghost" label="Add someone" onPress={() => router.push(`/night/${nightId}/join`)} style={styles.actionFlex} />}
               <Button kind="ghost" label="Recap" onPress={() => router.push(`/night/${nightId}/recap`)} style={styles.actionFlex} />
             </View>
-            {expenses.length === 0 && <Text style={styles.dim}>Board's clean. Chalk up the first round.</Text>}
-            {expenses.length > 0 && !ended && <Text style={styles.dim}>Tap a round to edit it · hold to wipe it off</Text>}
+            {expenses.length === 0 && !ended && <Text style={styles.dim}>When someone pays for something, tap Someone paid.</Text>}
+            {expenses.length > 0 && !ended && <Text style={styles.dim}>Tap one to change it · hold to remove it</Text>}
           </View>
         }
-        renderItem={({ item: e }) => {
+        renderItem={({ item: e, index }) => {
           const payer = byId.get(e.payerId);
           const title = e.note || categoryLabel(e.category);
           return (
-            <Pressable
-              disabled={ended}
-              onPress={() => router.push(`/night/${nightId}/expense?expenseId=${e.id}`)}
-              onLongPress={() => remove(e)}
-              accessibilityRole="button"
-              accessibilityLabel={`${title}, ${money(e.amount)}, ${payer?.name ?? 'someone'} paid${e.isTreat ? ', on them' : ''}`}
-              accessibilityHint={ended ? undefined : 'Tap to edit. Hold to wipe it off.'}
-              style={styles.exp}
-            >
-              <Text style={styles.expEmoji}>{categoryEmoji(e.category)}</Text>
-              <View style={styles.flex}>
-                <Text style={styles.expTitle}>{title}</Text>
-                <Text style={styles.dim}>{payer?.name} paid</Text>
-              </View>
-              {e.isTreat && (
-                <Circled>
-                  <Text style={styles.onMe}>ON ME</Text>
-                </Circled>
-              )}
-              <Text style={styles.expAmt}>{money(e.amount)}</Text>
-              {striking === e.id && <Strike thickness={4} />}
-            </Pressable>
+            <Enter index={index}>
+              <Tap
+                disabled={ended}
+                onPress={() => router.push(`/night/${nightId}/expense?expenseId=${e.id}`)}
+                onLongPress={() => remove(e)}
+                accessibilityRole="button"
+                accessibilityLabel={`${title}, ${money(e.amount)}, ${payer?.name ?? 'someone'} paid${e.isTreat ? ', on them' : ''}`}
+                accessibilityHint={ended ? undefined : 'Tap to change it. Hold to remove it.'}
+                style={styles.exp}
+              >
+                <Text style={styles.expEmoji}>{categoryEmoji(e.category)}</Text>
+                <View style={styles.flex}>
+                  <Text style={styles.expTitle} numberOfLines={1}>{title}</Text>
+                  <Text style={styles.dim}>{payer?.name} paid</Text>
+                </View>
+                {e.isTreat && (
+                  <Circled>
+                    <Text style={styles.onMe}>ON ME</Text>
+                  </Circled>
+                )}
+                <Text style={styles.expAmt} numberOfLines={1}>{money(e.amount)}</Text>
+                {striking === e.id && <Strike thickness={4} />}
+              </Tap>
+            </Enter>
           );
         }}
       />
       {!ended && (
-        <View style={[styles.bottom, { bottom: BAR_GAP + insets.bottom }]}>
-          <Button label="Chalk up a round" onPress={() => router.push(`/night/${nightId}/expense`)} />
+        <View style={[styles.panel, { paddingBottom: PANEL_PAD + insets.bottom }]}>
+          <Button label="Someone paid" onPress={() => router.push(`/night/${nightId}/expense`)} />
+          <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} />
         </View>
       )}
       {ended && <Text style={[styles.closed, { bottom: 28 + insets.bottom }]}>All square. This night is closed.</Text>}
-      <Snackbar visible={undo != null} message="Round wiped" action="Undo" onAction={restore} onHide={() => setUndo(null)} bottomOffset={BAR_GAP + theme.tap + 12} />
+      <Snackbar visible={undo != null} message="Removed" action="Undo" onAction={restore} onHide={() => setUndo(null)} bottomOffset={PANEL_H + 12} />
     </View>
   );
 }
@@ -175,6 +180,9 @@ const styles = StyleSheet.create({
   onMe: { ...theme.type.big, fontSize: theme.font.body, color: theme.color.accent },
   expAmt: { ...theme.type.big, fontSize: theme.font.title, color: theme.color.ink },
   dim: { ...theme.type.small, color: theme.color.inkDim },
-  bottom: { position: 'absolute', left: 16, right: 16 },
+  panel: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: PANEL_PAD, gap: PANEL_GAP,
+    backgroundColor: theme.color.bg, borderTopWidth: 2, borderTopColor: theme.color.line,
+  },
   closed: { ...theme.type.label, position: 'absolute', alignSelf: 'center', color: theme.color.owed },
 });

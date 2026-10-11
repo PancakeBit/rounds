@@ -29,7 +29,7 @@ type ExpenseRow = {
   id: number; night_id: number; payer_id: number; amount_minor: number;
   category: string; note: string; is_treat: number; created_at: number;
 };
-type ShareRow = { expense_id: number; person_id: number; weight: number; fixed_minor: number | null };
+type ShareRow = { expense_id: number; person_id: number; weight: number; extra_minor: number | null };
 type SettlementRow = { id: number; from_id: number; to_id: number; amount_minor: number; paid_at: number | null };
 
 const toPerson = (r: PersonRow): Person => ({ ...r, archived: r.archived === 1 });
@@ -62,9 +62,23 @@ export async function setArchived(db: SQLiteDatabase, id: number, archived: bool
 
 // Nights
 
-export async function getActiveNight(db: SQLiteDatabase): Promise<Night | null> {
-  const r = await db.getFirstAsync<NightRow>('SELECT * FROM nights WHERE ended_at IS NULL ORDER BY started_at DESC');
-  return r ? toNight(r) : null;
+export interface OpenNight extends Night { unpaid: number }
+
+// Nights stay open until someone closes them, so several can be open at once (payments can take days).
+// `unpaid` is what is still to move between people, net of transfers already ticked off.
+export async function listOpenNights(db: SQLiteDatabase): Promise<OpenNight[]> {
+  const rows = await db.getAllAsync<NightRow>('SELECT * FROM nights WHERE ended_at IS NULL ORDER BY started_at DESC');
+  const out: OpenNight[] = [];
+  for (const r of rows) {
+    const data = await getNight(db, r.id);
+    const expenses = await listExpenses(db, r.id);
+    const paid = (await listSettlements(db, r.id)).filter(s => s.paidAt != null);
+    const net = nightBalances(data?.members.map(m => m.id) ?? [], expenses, paid);
+    let unpaid = 0;
+    for (const v of net.values()) if (v > 0) unpaid += v;
+    out.push({ ...toNight(r), unpaid });
+  }
+  return out;
 }
 
 export async function listPastNights(db: SQLiteDatabase): Promise<Night[]> {
@@ -74,23 +88,16 @@ export async function listPastNights(db: SQLiteDatabase): Promise<Night[]> {
 
 export async function startNight(db: SQLiteDatabase, title: string, memberIds: number[]): Promise<number> {
   if (memberIds.length < 2) throw new Error('A night needs at least two people');
-  const running = 'A night is already running. Settle it first.';
   let id = 0;
   await db.withTransactionAsync(async () => {
-    if (await getActiveNight(db)) throw new Error(running);
-    try {
-      const r = await db.runAsync('INSERT INTO nights (title, started_at) VALUES (?, ?)', title.trim() || 'Night out', Date.now());
-      id = r.lastInsertRowId;
-    } catch (e) {
-      if (String(e instanceof Error ? e.message : e).includes('UNIQUE')) throw new Error(running);
-      throw e;
-    }
+    const r = await db.runAsync('INSERT INTO nights (title, started_at) VALUES (?, ?)', title.trim() || 'Night out', Date.now());
+    id = r.lastInsertRowId;
     for (const pid of memberIds) await db.runAsync('INSERT INTO night_members (night_id, person_id) VALUES (?, ?)', id, pid);
   });
   return id;
 }
 
-// A late arrival joins a night that is already running. Earlier rounds keep their stored shares.
+// A late arrival joins a night that is already running. Earlier payments keep their stored shares.
 export async function addNightMember(db: SQLiteDatabase, nightId: number, personId: number): Promise<void> {
   await db.withTransactionAsync(async () => {
     await assertOpen(db, nightId);
@@ -137,13 +144,13 @@ export async function endNight(db: SQLiteDatabase, id: number): Promise<void> {
 export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise<Expense[]> {
   const rows = await db.getAllAsync<ExpenseRow>('SELECT * FROM expenses WHERE night_id = ? ORDER BY created_at, id', nightId);
   const shareRows = await db.getAllAsync<ShareRow>(
-    'SELECT s.expense_id, s.person_id, s.weight, s.fixed_minor FROM expense_shares s JOIN expenses e ON e.id = s.expense_id WHERE e.night_id = ? ORDER BY s.expense_id, s.position',
+    'SELECT s.expense_id, s.person_id, s.weight, s.extra_minor FROM expense_shares s JOIN expenses e ON e.id = s.expense_id WHERE e.night_id = ? ORDER BY s.expense_id, s.position',
     nightId,
   );
   const shares = new Map<number, ShareInput[]>();
   for (const s of shareRows) {
     const list = shares.get(s.expense_id) ?? [];
-    list.push({ personId: s.person_id, weight: s.weight, fixed: s.fixed_minor });
+    list.push({ personId: s.person_id, weight: s.weight, extra: s.extra_minor });
     shares.set(s.expense_id, list);
   }
   return rows.map(r => ({
@@ -162,7 +169,7 @@ export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise
 async function assertOpen(db: SQLiteDatabase, nightId: number) {
   const n = await db.getFirstAsync<{ ended_at: number | null }>('SELECT ended_at FROM nights WHERE id = ?', nightId);
   if (!n) throw new Error('That night no longer exists');
-  if (n.ended_at != null) throw new Error('This night is settled and closed');
+  if (n.ended_at != null) throw new Error('This night is closed');
 }
 
 export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Promise<number> {
@@ -170,8 +177,8 @@ export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Prom
   if (!check.ok) throw new Error(check.error);
   if (input.id != null) {
     const existing = await db.getFirstAsync<{ night_id: number }>('SELECT night_id FROM expenses WHERE id = ?', input.id);
-    if (!existing) throw new Error('That round is already gone');
-    if (existing.night_id !== input.nightId) throw new Error('That round belongs to a different night');
+    if (!existing) throw new Error('That one is already gone');
+    if (existing.night_id !== input.nightId) throw new Error('That belongs to a different night');
     await assertOpen(db, existing.night_id);
   } else {
     await assertOpen(db, input.nightId);
@@ -193,8 +200,8 @@ export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Prom
     }
     for (const [position, s] of input.shares.entries()) {
       await db.runAsync(
-        'INSERT INTO expense_shares (expense_id, person_id, weight, fixed_minor, position) VALUES (?, ?, ?, ?, ?)',
-        id, s.personId, s.weight, s.fixed ?? null, position,
+        'INSERT INTO expense_shares (expense_id, person_id, weight, extra_minor, position) VALUES (?, ?, ?, ?, ?)',
+        id, s.personId, s.weight, s.extra || null, position,
       );
     }
   });
@@ -203,7 +210,7 @@ export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Prom
 
 export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<ExpenseInput> {
   const row = await db.getFirstAsync<{ night_id: number }>('SELECT night_id FROM expenses WHERE id = ?', id);
-  if (!row) throw new Error('That round is already gone');
+  if (!row) throw new Error('That one is already gone');
   await assertOpen(db, row.night_id);
   const e = (await listExpenses(db, row.night_id)).find(x => x.id === id)!;
   await db.runAsync('DELETE FROM expenses WHERE id = ?', id);

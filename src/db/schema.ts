@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const LATEST = 1;
+const LATEST = 2;
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -63,6 +63,33 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
         CREATE UNIQUE INDEX one_active_night ON nights (ifnull(ended_at, 0)) WHERE ended_at IS NULL;
       `);
     }
+    if (row.user_version < 2) {
+      // v2: no currency (plain two-decimal numbers), several nights open at once, and an exact
+      // amount became an extra on top of a share. An old exact amount is an extra with no share.
+      const cur = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'currency'");
+      if (cur && zeroDecimals(cur.value)) {
+        await db.execAsync(`
+          UPDATE expenses SET amount_minor = amount_minor * 100;
+          UPDATE expense_shares SET fixed_minor = fixed_minor * 100 WHERE fixed_minor IS NOT NULL;
+          UPDATE settlements SET amount_minor = amount_minor * 100;
+        `);
+      }
+      await db.execAsync(`
+        DELETE FROM settings WHERE key = 'currency';
+        DROP INDEX IF EXISTS one_active_night;
+        ALTER TABLE expense_shares RENAME COLUMN fixed_minor TO extra_minor;
+        UPDATE expense_shares SET weight = 0 WHERE extra_minor IS NOT NULL;
+      `);
+    }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);
   });
+}
+
+// v1 stored amounts in the currency's own minor unit. Yen-style currencies had none, so those need scaling.
+function zeroDecimals(code: string): boolean {
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits === 0;
+  } catch {
+    return false;
+  }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Tap } from '../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -48,9 +49,9 @@ export default function Crew() {
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'The crew' }} />
       <View style={styles.addRow}>
-        <Pressable style={styles.shuffle} accessibilityRole="button" onPress={() => setLook(l => l + 1)} accessibilityLabel="Shuffle emoji and colour">
+        <Tap style={styles.shuffle} accessibilityRole="button" onPress={() => setLook(l => l + 1)} accessibilityLabel="Shuffle emoji and colour">
           <Avatar person={{ name, ...lookAt(look) }} size={56} />
-        </Pressable>
+        </Tap>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -67,9 +68,9 @@ export default function Crew() {
 
       {people.map(p => (
         <View key={p.id} style={styles.row}>
-          <Pressable style={styles.shuffle} accessibilityRole="button" onPress={() => reshuffle(p)} accessibilityLabel={`Shuffle ${p.name}'s look`}>
+          <Tap style={styles.shuffle} accessibilityRole="button" onPress={() => reshuffle(p)} accessibilityLabel={`Shuffle ${p.name}'s look`}>
             <Avatar person={p} dimmed={p.archived} />
-          </Pressable>
+          </Tap>
           <TextInput
             key={`${p.id}-${rev}`}
             defaultValue={p.name}

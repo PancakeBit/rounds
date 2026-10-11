@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Tap } from './Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from './theme';
 
@@ -26,9 +27,9 @@ export function Snackbar({ visible, message, action, onAction, onHide, bottomOff
   return (
     <View style={[styles.bar, { bottom: insets.bottom + bottomOffset }]}>
       <Text style={styles.msg}>{message}</Text>
-      <Pressable onPress={onAction} hitSlop={16} accessibilityRole="button">
+      <Tap onPress={onAction} hitSlop={16} ring={theme.color.bg} accessibilityRole="button">
         <Text style={styles.action}>{action}</Text>
-      </Pressable>
+      </Tap>
     </View>
   );
 }

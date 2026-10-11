@@ -41,7 +41,7 @@ export function RecapCard({ night, stats, members, money, showFaces }: Props) {
       <Text style={styles.kicker}>{new Date(night.startedAt).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
       <Text style={styles.total}>{money(stats.total)}</Text>
       <Text style={styles.sub}>
-        {night.title} · {stats.rounds} {stats.rounds === 1 ? 'round' : 'rounds'}{stats.topCategory ? ` · mostly ${categoryEmoji(stats.topCategory)}` : ''}
+        {night.title} · {stats.rounds} {stats.rounds === 1 ? 'thing' : 'things'} paid for{stats.topCategory ? ` · mostly ${categoryEmoji(stats.topCategory)}` : ''}
       </Text>
 
       {faces && (
@@ -83,7 +83,7 @@ export function RecapCard({ night, stats, members, money, showFaces }: Props) {
           </View>
         ))}
       </View>
-      <Text style={styles.footer}>Chalked up with Rounds</Text>
+      <Text style={styles.footer}>Kept with Rounds</Text>
     </View>
   );
 }
