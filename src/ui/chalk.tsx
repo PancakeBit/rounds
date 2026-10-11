@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Avatar } from './Avatar';
@@ -9,14 +9,24 @@ import { theme } from './theme';
 
 const lin = Easing.linear;
 
+// One shared store: a single OS query and a single subscription for the whole app.
+let reduceMotion = false;
+const listeners = new Set<() => void>();
+function setReduceMotion(v: boolean) {
+  if (v === reduceMotion) return;
+  reduceMotion = v;
+  listeners.forEach(l => l());
+}
+AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
 export function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => sub.remove();
-  }, []);
-  return reduce;
+  return useSyncExternalStore(subscribe, () => reduceMotion, () => false);
 }
 
 // Drops its children in from 12dp above with a 180ms quiver, every time `trigger` changes.
@@ -24,14 +34,19 @@ export function Land({ trigger, children, style }: { trigger: unknown; children:
   const y = useRef(new Animated.Value(0)).current;
   const reduce = useReduceMotion();
   useEffect(() => {
-    if (reduce) return;
+    if (reduce) {
+      y.setValue(0);
+      return;
+    }
     y.setValue(-12);
-    Animated.sequence([
+    const anim = Animated.sequence([
       Animated.timing(y, { toValue: 2, duration: 63, easing: lin, useNativeDriver: true }),
       Animated.timing(y, { toValue: -1, duration: 36, easing: lin, useNativeDriver: true }),
       Animated.timing(y, { toValue: 1, duration: 36, easing: lin, useNativeDriver: true }),
       Animated.timing(y, { toValue: 0, duration: 45, easing: lin, useNativeDriver: true }),
-    ]).start();
+    ]);
+    anim.start();
+    return () => anim.stop();
   }, [trigger, reduce, y]);
   return <Animated.View style={[style, { transform: [{ translateY: y }] }]}>{children}</Animated.View>;
 }
@@ -45,7 +60,10 @@ export function Strike({ color = theme.color.ink, thickness = 4 }: { color?: str
       s.setValue(1);
       return;
     }
-    Animated.timing(s, { toValue: 1, duration: 140, easing: lin, useNativeDriver: true }).start();
+    const anim = Animated.timing(s, { toValue: 1, duration: 140, easing: lin, useNativeDriver: true });
+    s.setValue(0);
+    anim.start();
+    return () => anim.stop();
   }, [reduce, s]);
   return (
     <Animated.View
@@ -73,7 +91,10 @@ export function Circled({ children, color = theme.color.accent }: { children: Re
       k.setValue(1);
       return;
     }
-    Animated.timing(k, { toValue: 1, duration: 140, easing: lin, useNativeDriver: true }).start();
+    const anim = Animated.timing(k, { toValue: 1, duration: 140, easing: lin, useNativeDriver: true });
+    k.setValue(0);
+    anim.start();
+    return () => anim.stop();
   }, [reduce, k]);
   const scale = k.interpolate({ inputRange: [0, 1], outputRange: [1.25, 1] });
   return (
@@ -139,19 +160,27 @@ export function AllSquare({ visible, line, children }: { visible: boolean; line:
     if (!visible) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const t = setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 140);
-    if (!reduce) {
-      slam.setValue(1.14);
-      dust.setValue(0);
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(slam, { toValue: 0.97, duration: 88, easing: lin, useNativeDriver: true }),
-          Animated.timing(slam, { toValue: 1.015, duration: 55, easing: lin, useNativeDriver: true }),
-          Animated.timing(slam, { toValue: 1, duration: 77, easing: lin, useNativeDriver: true }),
-        ]),
-        Animated.timing(dust, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      ]).start();
-    }
     return () => clearTimeout(t);
+  }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    if (reduce) {
+      slam.setValue(1);
+      dust.setValue(1);
+      return;
+    }
+    slam.setValue(1.14);
+    dust.setValue(0);
+    const anim = Animated.parallel([
+      Animated.sequence([
+        Animated.timing(slam, { toValue: 0.97, duration: 88, easing: lin, useNativeDriver: true }),
+        Animated.timing(slam, { toValue: 1.015, duration: 55, easing: lin, useNativeDriver: true }),
+        Animated.timing(slam, { toValue: 1, duration: 77, easing: lin, useNativeDriver: true }),
+      ]),
+      Animated.timing(dust, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]);
+    anim.start();
+    return () => anim.stop();
   }, [visible, reduce, slam, dust]);
   if (!visible) return null;
   const fade = dust.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] });
