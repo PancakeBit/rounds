@@ -26,6 +26,8 @@ export function Tap({ style, children, ring = theme.color.ink, sink = 0.92, onPr
 
   return (
     <AnimatedPressable
+      // A short delay lets a scroll claim the touch first, so swiping a list doesn't buzz or sink what's under the finger.
+      unstable_pressDelay={40}
       {...rest}
       disabled={disabled}
       onPressIn={e => {

@@ -221,7 +221,7 @@ export default function ExpenseScreen() {
                       accessibilityLabel={st.extra ? `${m.name}'s extra, ${money(st.extra)}. Tap to change` : `Add an extra for ${m.name}`}
                       style={[styles.extraBtn, st.extra ? styles.extraOn : null]}
                     >
-                      <Text style={[styles.extraText, st.extra ? styles.extraTextOn : null]} numberOfLines={1}>
+                      <Text style={[styles.extraText, st.extra ? styles.extraTextOn : null]} numberOfLines={1} adjustsFontSizeToFit>
                         {st.extra ? `+${money(st.extra)}` : '+ Extra'}
                       </Text>
                     </Tap>

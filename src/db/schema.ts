@@ -67,11 +67,19 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       // v2: no currency (plain two-decimal numbers), several nights open at once, and an exact
       // amount became an extra on top of a share. An old exact amount is an extra with no share.
       const cur = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'currency'");
-      if (cur && zeroDecimals(cur.value)) {
+      const digits = cur ? currencyDigits(cur.value) : 2;
+      if (digits === 0) {
         await db.execAsync(`
           UPDATE expenses SET amount_minor = amount_minor * 100;
           UPDATE expense_shares SET fixed_minor = fixed_minor * 100 WHERE fixed_minor IS NOT NULL;
           UPDATE settlements SET amount_minor = amount_minor * 100;
+        `);
+      } else if (digits === 3) {
+        // Thousandths to hundredths. Rounds to the nearest hundredth; never below 1 (the CHECKs forbid 0).
+        await db.execAsync(`
+          UPDATE expenses SET amount_minor = MAX(1, CAST(ROUND(amount_minor / 10.0) AS INTEGER));
+          UPDATE expense_shares SET fixed_minor = CAST(ROUND(fixed_minor / 10.0) AS INTEGER) WHERE fixed_minor IS NOT NULL;
+          UPDATE settlements SET amount_minor = MAX(1, CAST(ROUND(amount_minor / 10.0) AS INTEGER));
         `);
       }
       await db.execAsync(`
@@ -85,11 +93,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
   });
 }
 
-// v1 stored amounts in the currency's own minor unit. Yen-style currencies had none, so those need scaling.
-function zeroDecimals(code: string): boolean {
+// v1 stored amounts in the currency's own minor unit: none for yen-style, thousandths for dinar-style.
+function currencyDigits(code: string): number {
   try {
-    return new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits === 0;
+    return new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
   } catch {
-    return false;
+    return 2;
   }
 }

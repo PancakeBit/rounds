@@ -135,7 +135,7 @@ export function ScoreColumn({ person, photo, history, money, first = false }: Sc
           </Land>
         ) : (
           <View key={index} style={styles.figOldWrap}>
-            <Text style={styles.figOld} numberOfLines={1}>{signed(v)}</Text>
+            <Text style={styles.figOld} numberOfLines={1} adjustsFontSizeToFit>{signed(v)}</Text>
             <Strike thickness={3} />
           </View>
         );
