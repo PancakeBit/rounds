@@ -60,19 +60,19 @@ export default function Recap() {
   async function shareText() {
     if (!night || busy.current) return;
     busy.current = true;
-    // Worked out fresh, so it is right even mid-night before anyone has opened Settle up.
-    const open = settle(nightBalances(members.map(m => m.id), expenses, paid));
-    const message = nightSummary({
-      title: night.title,
-      date: new Date(night.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
-      memberIds: members.map(m => m.id),
-      names: new Map(members.map(m => [m.id, m.name])),
-      expenses,
-      paid,
-      open,
-      money,
-    });
     try {
+      // Worked out fresh, so it is right even mid-night before anyone has opened Settle up.
+      const open = settle(nightBalances(members.map(m => m.id), expenses, paid));
+      const message = nightSummary({
+        title: night.title,
+        date: new Date(night.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+        memberIds: members.map(m => m.id),
+        names: new Map(members.map(m => [m.id, m.name])),
+        expenses,
+        paid,
+        open,
+        money,
+      });
       await Share.share({ message });
     } catch (e) {
       oops(e, "Couldn't share the text");
