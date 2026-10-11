@@ -17,7 +17,7 @@ export default function Crew() {
   const [look, setLook] = useState(0);
   const [rev, setRev] = useState(0);
 
-  const load = useCallback(async () => { await guarded("Couldn't load the board", async () => setPeople(await listCrew(db, true))); }, [db]);
+  const load = useCallback(async () => { await guarded("Couldn't load the crew", async () => setPeople(await listCrew(db, true))); }, [db]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function add() {
@@ -36,10 +36,10 @@ export default function Crew() {
   }
 
   async function rename(p: Person, next: string) {
-    if (!next.trim() || next.trim() === p.name) { setRev(r => r + 1); return load(); }
-    await guarded("Couldn't update the crew", () => updatePerson(db, p.id, { name: next, emoji: p.emoji, color: p.color }));
-    setRev(r => r + 1);
-    load();
+    if (!next.trim() || next.trim() === p.name) { await load(); setRev(r => r + 1); return; }
+    const ok = await guarded("Couldn't update the crew", async () => { await updatePerson(db, p.id, { name: next, emoji: p.emoji, color: p.color }); return true; });
+    await load();
+    if (!ok) setRev(r => r + 1);
   }
 
   return (
