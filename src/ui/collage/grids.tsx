@@ -139,7 +139,7 @@ export function FaceWall({ d }: { d: CollageData }) {
         })}
         <View style={[wall.title, { left: at(tc), top: at(tr), width: big, height: big, padding: big * 0.07 }]}>
           <Text style={wall.date} numberOfLines={1} adjustsFontSizeToFit>{d.date}</Text>
-          <Text style={[wall.titleText, { fontSize: big * 0.3, lineHeight: big * 0.29 }]} numberOfLines={3} adjustsFontSizeToFit>
+          <Text style={[wall.titleText, { fontSize: big * 0.3, lineHeight: big * 0.31 }]} numberOfLines={3} adjustsFontSizeToFit>
             {d.night.title}
           </Text>
           <Text style={wall.count} numberOfLines={1}>{faces.length} FACES</Text>
@@ -169,7 +169,16 @@ export function Contact({ d }: { d: CollageData }) {
   const gap = 10;
   const cell = Math.floor((W - d.pad * 2 - gap * 2) / 3);
   const endPick = shots.findIndex(s => s.kind === 'group' && s.phase === 'end');
-  const pickIndex = endPick >= 0 ? endPick : Math.max(0, shots.findIndex(s => s.kind === 'group'));
+  const pickAt = endPick >= 0 ? endPick : Math.max(0, shots.findIndex(s => s.kind === 'group'));
+  // At most four rows: past 12 photos, 11 frames (always including the marked one) and a +N badge.
+  const MAX = 12;
+  let shown = shots;
+  if (shots.length > MAX) {
+    shown = shots.slice(0, MAX - 1);
+    if (pickAt >= MAX - 1) shown[MAX - 2] = shots[pickAt];
+  }
+  const pickIndex = shown.indexOf(shots[pickAt]);
+  const hidden = shots.length - shown.length;
   return (
     <Root width={W} style={{ padding: d.pad }}>
       <View style={sheet.head}>
@@ -180,7 +189,7 @@ export function Contact({ d }: { d: CollageData }) {
       </View>
       <Rule style={{ marginVertical: d.pad * 0.7 }} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: gap, rowGap: gap + 2 }}>
-        {shots.map((s, i) => (
+        {shown.map((s, i) => (
           <View key={`${s.phase}-${s.kind}-${s.member?.id ?? 'g'}`} style={{ width: cell }}>
             <View>
               <Photo uri={s.uri} width={cell} height={cell} style={{ borderWidth: 2, borderColor: C.line }} />
@@ -194,6 +203,11 @@ export function Contact({ d }: { d: CollageData }) {
             </View>
           </View>
         ))}
+        {hidden > 0 && (
+          <View style={{ width: cell, height: cell, alignItems: 'center', justifyContent: 'center' }}>
+            <MoreBadge n={hidden} size={cell * 0.6} />
+          </View>
+        )}
       </View>
       <Footer style={{ marginTop: d.pad }} />
     </Root>

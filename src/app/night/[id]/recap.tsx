@@ -1,34 +1,43 @@
-import { useCallback, useRef, useState } from 'react';
-import { ScrollView, Share, StyleSheet, View } from 'react-native';
+import { useCallback, useRef, useState, type RefObject } from 'react';
+import { ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 import { nightBalances } from '../../../core/balances';
+import { defaultLayout, fittingLayouts, nextLayout, shotsOf, type LayoutId } from '../../../core/collage';
+import { formatMoney as money } from '../../../core/money';
 import { settle } from '../../../core/settle';
 import { nightStats } from '../../../core/stats';
 import { nightSummary } from '../../../core/summary';
 import {
   getNight, listExpenses, listSettlements, type Expense, type Night, type NightMember, type Settlement,
 } from '../../../db/repo';
-import { formatMoney as money } from '../../../core/money';
 import { Button } from '../../../ui/Button';
+import { Collage } from '../../../ui/collage/Collage';
 import { guarded, oops } from '../../../ui/oops';
-import { RecapCard } from '../../../ui/RecapCard';
+import { ReceiptCard } from '../../../ui/ReceiptCard';
+import { Tap } from '../../../ui/Tap';
 import { theme } from '../../../ui/theme';
+
+type Tab = 'receipt' | 'photos';
+const PAD = 20;
 
 export default function Recap() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
-  const card = useRef<View>(null);
+  const receiptRef = useRef<View>(null);
+  const photosRef = useRef<View>(null);
   const [night, setNight] = useState<Night | null>(null);
   const [members, setMembers] = useState<NightMember[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [paid, setPaid] = useState<Settlement[]>([]);
-  const [showFaces, setShowFaces] = useState(true);
+  const [tab, setTab] = useState<Tab>('receipt');
+  const [layout, setLayout] = useState<LayoutId | null>(null);
   const busy = useRef(false);
 
   // On focus, so photos taken on the line-up screen show up when coming back.
@@ -42,17 +51,23 @@ export default function Recap() {
       setMembers(data.members);
       setExpenses(exp);
       setPaid(sett.filter(s => s.paidAt != null));
+      // Keep a shuffled layout while it still fits the photos; otherwise use the night's own pick.
+      const shots = shotsOf(data.night, data.members);
+      setLayout(prev => (prev != null && fittingLayouts(shots).includes(prev) ? prev : defaultLayout(shots, data.night.id)));
     });
   }, [db, nightId]));
 
-  async function share() {
+  // Worked out fresh, so it is right even mid-night before anyone has opened Settle up.
+  const openTransfers = () => settle(nightBalances(members.map(m => m.id), expenses, paid));
+
+  async function shareImage(ref: RefObject<View | null>, what: string) {
     if (busy.current) return;
     busy.current = true;
     try {
-      const uri = await captureRef(card, { format: 'png', quality: 1 });
+      const uri = await captureRef(ref, { format: 'png', quality: 1 });
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Send to the group' });
     } catch (e) {
-      oops(e, "Couldn't share the recap");
+      oops(e, `Couldn't share the ${what}`);
     } finally {
       busy.current = false;
     }
@@ -62,8 +77,6 @@ export default function Recap() {
     if (!night || busy.current) return;
     busy.current = true;
     try {
-      // Worked out fresh, so it is right even mid-night before anyone has opened Settle up.
-      const open = settle(nightBalances(members.map(m => m.id), expenses, paid));
       const message = nightSummary({
         title: night.title,
         date: new Date(night.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
@@ -71,7 +84,7 @@ export default function Recap() {
         names: new Map(members.map(m => [m.id, m.name])),
         expenses,
         paid,
-        open,
+        open: openTransfers(),
         money,
       });
       await Share.share({ message });
@@ -83,24 +96,67 @@ export default function Recap() {
   }
 
   if (!night) return null;
-  const hasPhotos = night.groupPhoto != null || members.some(m => m.photoStart || m.photoEnd);
+
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
       <Stack.Screen options={{ title: 'Recap' }} />
-      <View ref={card} collapsable={false} style={styles.capture}>
-        <RecapCard night={night} stats={nightStats(expenses)} members={members} money={money} showFaces={showFaces} />
+      <View style={styles.tabs} accessibilityRole="tablist">
+        {(['receipt', 'photos'] as const).map(t => (
+          <Tap
+            key={t}
+            onPress={() => setTab(t)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t }}
+            style={[styles.tab, tab === t && styles.tabOn]}
+          >
+            <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>{t === 'receipt' ? 'The receipt' : 'The photos'}</Text>
+          </Tap>
+        ))}
       </View>
-      {hasPhotos && (
-        <Button kind="ghost" label={showFaces ? 'Hide faces' : 'Show faces'} onPress={() => setShowFaces(v => !v)} />
+
+      {tab === 'receipt' ? (
+        <>
+          <View ref={receiptRef} collapsable={false} style={styles.capture}>
+            <ReceiptCard night={night} members={members} expenses={expenses} stats={nightStats(expenses)} open={openTransfers()} paid={paid} />
+          </View>
+          <Button label="Send the receipt" onPress={() => shareImage(receiptRef, 'receipt')} style={styles.share} />
+          <Button kind="ghost" label="Send as text" onPress={shareText} />
+        </>
+      ) : layout == null ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyBig}>No photos from this night.</Text>
+          <Text style={styles.dim}>Snap the crew at the start or the end, or take a group shot, and the collage builds itself.</Text>
+          <Button
+            label="Take some"
+            onPress={() => router.push(`/night/${nightId}/lineup?phase=${night.endedAt != null ? 'end' : 'start'}&then=back`)}
+          />
+        </View>
+      ) : (
+        <>
+          <View ref={photosRef} collapsable={false} style={styles.capture}>
+            <Collage layout={layout} night={night} members={members} width={width - PAD * 2} />
+          </View>
+          <Button kind="ghost" label="Shuffle the layout" onPress={() => setLayout(l => (l ? nextLayout(shotsOf(night, members), l) : l))} />
+          <Button label="Send the photos" onPress={() => shareImage(photosRef, 'photos')} style={styles.share} />
+        </>
       )}
-      <Button label="Send to the group" onPress={share} style={styles.share} />
-      <Button kind="ghost" label="Send as text" onPress={shareText} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { padding: 20, gap: 12 },
-  capture: { backgroundColor: theme.color.bg, padding: 8 },
+  body: { padding: PAD, gap: 12 },
+  tabs: { flexDirection: 'row', gap: 8 },
+  tab: {
+    flex: 1, minHeight: theme.tap, borderRadius: theme.radius.md, borderWidth: 2, borderColor: theme.color.line,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tabOn: { backgroundColor: theme.color.ink, borderColor: theme.color.ink },
+  tabText: { ...theme.type.title, color: theme.color.ink, textTransform: 'uppercase' },
+  tabTextOn: { color: theme.color.bg },
+  capture: { backgroundColor: theme.color.bg },
   share: { minHeight: 64 },
+  empty: { gap: 14, paddingVertical: 32 },
+  emptyBig: { ...theme.type.display, color: theme.color.ink },
+  dim: { ...theme.type.body, color: theme.color.inkDim },
 });

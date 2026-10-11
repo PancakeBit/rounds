@@ -141,7 +141,7 @@ export function Header({ d, size = theme.font.display, align = 'left', lines = 2
   return (
     <View style={[{ alignItems: align === 'center' ? 'center' : 'flex-start' }, style]}>
       <Text style={styles.kicker} numberOfLines={1} adjustsFontSizeToFit>{d.date}</Text>
-      <Text style={[styles.title, { fontSize: size, lineHeight: size * 0.98, textAlign: align }]} numberOfLines={lines} adjustsFontSizeToFit>
+      <Text style={[styles.title, { fontSize: size, lineHeight: size * 1.04, textAlign: align }]} numberOfLines={lines} adjustsFontSizeToFit>
         {d.night.title}
       </Text>
       <Text style={styles.times} numberOfLines={1}>{d.startTime} → {d.endTime}</Text>

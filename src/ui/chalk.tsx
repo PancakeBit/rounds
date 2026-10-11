@@ -124,7 +124,7 @@ export function ScoreColumn({ person, photo, history, money, first = false }: Sc
   return (
     <View style={[styles.col, !first && styles.colRule]} accessible accessibilityLabel={`${person.name} ${word} ${money(Math.abs(last))}`}>
       <Avatar person={person} photo={photo} size={44} />
-      <Text style={styles.colName} numberOfLines={1}>{person.name}</Text>
+      <Text style={[styles.colName, { color: person.color }]} numberOfLines={1} adjustsFontSizeToFit>{person.name}</Text>
       {history.slice(start).map((v, i) => {
         // Keyed by position in the whole history: when a figure stops being current it remounts
         // as a struck figure, which is what plays the strike exactly once.

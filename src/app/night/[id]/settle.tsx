@@ -145,10 +145,15 @@ export default function SettleUp() {
                 >
                   {from && <Avatar person={from} photo={from.photoStart} size={44} />}
                   <View style={[styles.flex, done && styles.faded]}>
-                    <Text style={styles.who}>{from?.name} → {to?.name}</Text>
-                    <Text style={styles.amt}>{money(r.amount)}</Text>
+                    <Text style={styles.who} numberOfLines={1}>
+                      <Text style={{ color: from?.color ?? theme.color.ink }}>{from?.name}</Text>
+                      <Text style={styles.pays}> pays </Text>
+                      <Text style={{ color: to?.color ?? theme.color.ink }}>{to?.name}</Text>
+                    </Text>
+                    <Text style={styles.amt} numberOfLines={1} adjustsFontSizeToFit>{money(r.amount)}</Text>
                     {done && <Strike thickness={4} />}
                   </View>
+                  {to && <Avatar person={to} photo={to.photoStart} size={32} />}
                   <View style={[styles.box, done && styles.boxDone]}>
                     {done && <Text style={styles.tick}>✓</Text>}
                   </View>
@@ -180,12 +185,13 @@ const styles = StyleSheet.create({
   countWord: { ...theme.type.big, color: theme.color.ink, textTransform: 'uppercase', paddingBottom: 10 },
   dim: { ...theme.type.body, color: theme.color.inkDim },
   row: {
-    minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.color.surface,
+    minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md, paddingHorizontal: 16,
   },
   flex: { flex: 1 },
   faded: { opacity: 0.5 },
-  who: { ...theme.type.bodyBold, color: theme.color.ink },
+  who: { ...theme.type.title, color: theme.color.ink },
+  pays: { ...theme.type.body, color: theme.color.inkDim },
   amt: { ...theme.type.display, color: theme.color.accent },
   box: {
     width: 40, height: 40, borderRadius: theme.radius.sm, borderWidth: 3, borderColor: theme.color.ink,
