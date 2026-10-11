@@ -145,7 +145,7 @@ export default function SettleUp() {
                 >
                   {from && <Avatar person={from} photo={from.photoStart} size={44} />}
                   <View style={[styles.flex, done && styles.faded]}>
-                    <Text style={styles.who} numberOfLines={1}>
+                    <Text style={styles.who} numberOfLines={2}>
                       <Text style={{ color: from?.color ?? theme.color.ink }}>{from?.name}</Text>
                       <Text style={styles.pays}> pays </Text>
                       <Text style={{ color: to?.color ?? theme.color.ink }}>{to?.name}</Text>

@@ -53,7 +53,12 @@ export default function Recap() {
       setPaid(sett.filter(s => s.paidAt != null));
       // Keep a shuffled layout while it still fits the photos; otherwise use the night's own pick.
       const shots = shotsOf(data.night, data.members);
-      setLayout(prev => (prev != null && fittingLayouts(shots).includes(prev) ? prev : defaultLayout(shots, data.night.id)));
+      setLayout(prev => {
+        const fit = fittingLayouts(shots);
+        // The plain single frame gives way as soon as anything richer fits.
+        const keep = prev != null && fit.includes(prev) && !(prev === 'single' && fit.length > 1);
+        return keep ? prev : defaultLayout(shots, data.night.id);
+      });
     });
   }, [db, nightId]));
 

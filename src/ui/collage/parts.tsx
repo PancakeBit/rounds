@@ -126,7 +126,7 @@ export function Polaroid({ uri, width, photoHeight, caption, mark, rotate = 0, s
             <Text style={[styles.caption, { fontSize: Math.min(theme.font.big, lip * 0.62) }]} numberOfLines={1} adjustsFontSizeToFit>
               {caption}
             </Text>
-            {mark ? <View style={[styles.capMark, { backgroundColor: mark }]} /> : null}
+            {mark ? <View style={[styles.capMark, { backgroundColor: mark, borderWidth: 2, borderColor: C.bg }]} /> : null}
           </View>
         ) : null}
       </View>

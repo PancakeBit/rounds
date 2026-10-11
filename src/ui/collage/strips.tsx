@@ -85,7 +85,7 @@ const film = StyleSheet.create({
   holes: { position: 'absolute', gap: 6 },
   hole: { width: 10, height: 10, borderRadius: 2, backgroundColor: C.bg },
   brand: { ...theme.type.smallBold, color: C.inkDim, textAlign: 'center', marginTop: 8, letterSpacing: 2 },
-  num: { ...theme.type.small, fontSize: 11, color: C.inkDim, marginTop: 3, fontVariant: ['tabular-nums'] },
+  num: { ...theme.type.small, color: C.inkDim, marginTop: 3, fontVariant: ['tabular-nums'] },
   label: { ...theme.type.title, textTransform: 'uppercase' },
   time: { ...theme.type.smallBold, color: C.inkDim, marginTop: 2 },
 });
@@ -212,7 +212,7 @@ export function Timeline({ d }: { d: CollageData }) {
     <Root width={W} style={{ padding: d.pad }}>
       <Header d={d} style={{ marginBottom: d.pad }} />
       <View>
-        <View style={[line.chalk, { left: lineX - 2 }]} />
+        <View style={[line.chalk, { left: lineX }]} />
         {stops.map(s => (
           <View key={s.key} style={{ flexDirection: 'row', marginBottom: d.pad * 1.2 }}>
             <View style={{ width: lineX * 2 + 4, alignItems: 'center', paddingTop: 4 }}>

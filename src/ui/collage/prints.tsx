@@ -35,11 +35,11 @@ export function Cover({ d }: { d: CollageData }) {
     <Root width={W}>
       <View style={{ width: W, height: H }}>
         <Photo uri={hero} width={W} height={H} />
-        <View style={[cover.scrim, { height: H * 0.42 }]} />
+        <View style={[cover.scrim, { height: H * (inset ? 0.5 : 0.42) }]} />
         <View style={[cover.scrimLow, { height: sticker + d.pad * 2 }]} />
         <View style={{ position: 'absolute', top: d.pad, left: d.pad, right: d.pad }}>
           <Text style={cover.kicker} numberOfLines={1} adjustsFontSizeToFit>{d.date}</Text>
-          <Text style={[cover.title, { fontSize: W * 0.27, lineHeight: W * 0.28 }]} numberOfLines={3} adjustsFontSizeToFit>
+          <Text style={[cover.title, { fontSize: W * 0.27, lineHeight: W * 0.28 }]} numberOfLines={inset ? 2 : 3} adjustsFontSizeToFit>
             {d.night.title}
           </Text>
           <Text style={cover.times} numberOfLines={1}>{d.startTime} → {d.endTime}</Text>
