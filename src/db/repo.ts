@@ -225,6 +225,9 @@ export async function generateSettlements(db: SQLiteDatabase, nightId: number): 
 }
 
 export async function setSettlementPaid(db: SQLiteDatabase, id: number, paid: boolean): Promise<void> {
+  const row = await db.getFirstAsync<{ night_id: number }>('SELECT night_id FROM settlements WHERE id = ?', id);
+  if (!row) throw new Error('That payment changed. Open Settle up again.');
+  await assertOpen(db, row.night_id);
   await db.runAsync('UPDATE settlements SET paid_at = ? WHERE id = ?', paid ? Date.now() : null, id);
 }
 

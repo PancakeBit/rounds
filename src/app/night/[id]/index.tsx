@@ -3,6 +3,7 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { balanceHistory } from '../../../core/balances';
 import { categoryEmoji, categoryLabel } from '../../../core/categories';
 import {
@@ -16,11 +17,14 @@ import { guarded } from '../../../ui/oops';
 import { Snackbar } from '../../../ui/Snackbar';
 import { theme } from '../../../ui/theme';
 
+const BAR_GAP = 20;
+
 export default function NightScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
   const money = useMoney();
+  const insets = useSafeAreaInsets();
   const [night, setNight] = useState<Night | null>(null);
   const [members, setMembers] = useState<NightMember[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -87,7 +91,7 @@ export default function NightScreen() {
       <FlatList
         data={[...expenses].reverse()}
         keyExtractor={e => String(e.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 120 + insets.bottom }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.kicker}>The tab</Text>
@@ -141,12 +145,12 @@ export default function NightScreen() {
         }}
       />
       {!ended && (
-        <View style={styles.bottom}>
+        <View style={[styles.bottom, { bottom: BAR_GAP + insets.bottom }]}>
           <Button label="Chalk up a round" onPress={() => router.push(`/night/${nightId}/expense`)} />
         </View>
       )}
-      {ended && <Text style={styles.closed}>All square. This night is closed.</Text>}
-      <Snackbar visible={undo != null} message="Round wiped" action="Undo" onAction={restore} onHide={() => setUndo(null)} />
+      {ended && <Text style={[styles.closed, { bottom: 28 + insets.bottom }]}>All square. This night is closed.</Text>}
+      <Snackbar visible={undo != null} message="Round wiped" action="Undo" onAction={restore} onHide={() => setUndo(null)} bottomOffset={BAR_GAP + theme.tap + 12} />
     </View>
   );
 }
@@ -169,6 +173,6 @@ const styles = StyleSheet.create({
   onMe: { ...theme.type.big, fontSize: theme.font.body, color: theme.color.accent },
   expAmt: { ...theme.type.big, fontSize: theme.font.title, color: theme.color.ink },
   dim: { ...theme.type.small, color: theme.color.inkDim },
-  bottom: { position: 'absolute', left: 16, right: 16, bottom: 20 },
-  closed: { ...theme.type.label, position: 'absolute', bottom: 28, alignSelf: 'center', color: theme.color.owed },
+  bottom: { position: 'absolute', left: 16, right: 16 },
+  closed: { ...theme.type.label, position: 'absolute', alignSelf: 'center', color: theme.color.owed },
 });

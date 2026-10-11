@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import {
@@ -14,6 +15,7 @@ import { guarded } from '../../../ui/oops';
 import { theme } from '../../../ui/theme';
 
 export default function SettleUp() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
@@ -33,7 +35,7 @@ export default function SettleUp() {
   }, []);
 
   const [loaded, setLoaded] = useState(false);
-  // One in-flight action at a time, so two quick ticks can't both see "all paid" and end the night twice.
+  // One in-flight action at a time, so a double tap can't close the night twice.
   const busy = useRef(false);
   const loadedRef = useRef(false);
 
@@ -70,12 +72,6 @@ export default function SettleUp() {
     show(list);
     loadedRef.current = true;
     setLoaded(true);
-    // A previous close may have failed after the last tick: retry it on focus.
-    if (data.night.endedAt == null && list.length > 0 && list.every(x => x.paidAt != null) && !busy.current) {
-      busy.current = true;
-      try { await closeNight(); } finally { busy.current = false; }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, nightId, show]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -91,7 +87,6 @@ export default function SettleUp() {
       });
       if (!next) return;
       show(next);
-      if (next.length > 0 && next.every(x => x.paidAt != null)) await closeNight();
     } finally {
       busy.current = false;
     }
@@ -105,7 +100,7 @@ export default function SettleUp() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Settle up' }} />
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
         {!loaded ? (
           <Text style={styles.dim}>Loading…</Text>
         ) : rows.length === 0 ? (
@@ -161,6 +156,7 @@ export default function SettleUp() {
             })}
           </>
         )}
+        {allPaid && <Text style={styles.dim}>Everyone's paid. Close the night when you're done.</Text>}
         {allPaid && <Button kind="go" label="Close the night" onPress={finish} />}
         {ended && !shot && <Button kind="ghost" label="See the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />}
       </ScrollView>

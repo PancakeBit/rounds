@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { addPerson, listCrew, setArchived, updatePerson, type Person } from '../db/repo';
@@ -11,6 +12,7 @@ import { CREW_COLORS, CREW_EMOJI, theme } from '../ui/theme';
 const lookAt = (i: number) => ({ emoji: CREW_EMOJI[i % CREW_EMOJI.length], color: CREW_COLORS[i % CREW_COLORS.length] });
 
 export default function Crew() {
+  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const [people, setPeople] = useState<Person[]>([]);
   const [name, setName] = useState('');
@@ -43,7 +45,7 @@ export default function Crew() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'The crew' }} />
       <View style={styles.addRow}>
         <Pressable style={styles.shuffle} accessibilityRole="button" onPress={() => setLook(l => l + 1)} accessibilityLabel="Shuffle emoji and colour">

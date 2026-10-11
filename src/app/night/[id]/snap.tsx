@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getNight, setGroupPhoto, setMemberPhoto } from '../../../db/repo';
 import { dropFile, keepPhoto, type Phase } from '../../../photos/store';
 import { Button } from '../../../ui/Button';
@@ -19,6 +20,7 @@ export default function Snap() {
   const personId = Number(params.personId);
   const phase: Phase = params.phase === 'end' ? 'end' : 'start';
   const db = useSQLiteContext();
+  const insets = useSafeAreaInsets();
   const cam = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>(isGroup ? 'back' : 'front');
@@ -90,7 +92,7 @@ export default function Snap() {
           <View style={styles.ring} />
         </View>
       )}
-      <View style={styles.controls}>
+      <View style={[styles.controls, { bottom: 32 + insets.bottom }]}>
         {error && <Text style={styles.error}>{error}</Text>}
         <View style={styles.row}>
           <View style={styles.side} />
@@ -117,7 +119,7 @@ const styles = StyleSheet.create({
   dim: { ...theme.type.body, color: theme.color.inkDim },
   aim: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
   ring: { width: 260, height: 260, borderRadius: 130, borderWidth: 4, borderColor: theme.color.ink, opacity: 0.9 },
-  controls: { position: 'absolute', left: 0, right: 0, bottom: 32, gap: 12, paddingHorizontal: 20 },
+  controls: { position: 'absolute', left: 0, right: 0, gap: 12, paddingHorizontal: 20 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   side: { width: 96 },
   shutter: { width: 84, height: 84, borderRadius: 42, backgroundColor: theme.color.ink, borderWidth: 6, borderColor: theme.color.bg },

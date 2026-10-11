@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { getNight, setGroupPhoto, setMemberPhoto, type Night, type NightMember } from '../../../db/repo';
@@ -13,6 +14,7 @@ import { theme } from '../../../ui/theme';
 // /night/[id]/lineup?phase=end              from ALL SQUARE; Done goes to the recap
 // add &then=back to return to wherever it was opened from instead
 export default function Lineup() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; phase?: string; then?: string }>();
   const nightId = Number(params.id);
   const phase: Phase = params.phase === 'end' ? 'end' : 'start';
@@ -62,7 +64,7 @@ export default function Lineup() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.body}>
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
       <Stack.Screen options={{ title: phase === 'start' ? 'The line-up' : 'One more for the board' }} />
       <Text style={styles.lead}>
         {phase === 'start'

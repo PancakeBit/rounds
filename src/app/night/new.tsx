@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { addPerson, listCrew, startNight, type Person } from '../../db/repo';
@@ -13,6 +14,7 @@ function defaultTitle() {
 }
 
 export default function NewNight() {
+  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const [crew, setCrew] = useState<Person[]>([]);
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -57,7 +59,7 @@ export default function NewNight() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'New night' }} />
       <TextInput value={title} onChangeText={setTitle} style={styles.title} maxLength={40} accessibilityLabel="Night name" />
       <Text style={styles.h2}>Who's out?</Text>

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, router, Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { getActiveNight, listCrew, listPastNights, type Night, type Person } from '../db/repo';
@@ -9,6 +10,7 @@ import { guarded } from '../ui/oops';
 import { theme } from '../ui/theme';
 
 export default function Home() {
+  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const [active, setActive] = useState<Night | null>(null);
   const [past, setPast] = useState<Night[]>([]);
@@ -23,7 +25,7 @@ export default function Home() {
   }, [db]));
 
   return (
-    <ScrollView contentContainerStyle={styles.body}>
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
       <Stack.Screen options={{ title: 'Rounds', headerRight: () => <Link href="/settings" style={styles.gear} accessibilityRole="button" accessibilityLabel="Settings">⚙️</Link> }} />
 
       {active ? (

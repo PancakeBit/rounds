@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
@@ -25,6 +26,7 @@ export default function ExpenseScreen() {
   const db = useSQLiteContext();
   const { currency } = useSettings();
   const money = useMoney();
+  const insets = useSafeAreaInsets();
 
   const [members, setMembers] = useState<NightMember[]>([]);
   const [amountText, setAmountText] = useState('');
@@ -120,7 +122,7 @@ export default function ExpenseScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: editingId != null ? 'Edit round' : 'New round' }} />
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 48 + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <Text style={[styles.amount, !amountText && styles.placeholder]}>{amountText ? money(amount ?? 0) : money(0)}</Text>
         <AmountPad value={amountText} onChange={setAmountText} decimals={minorDigits(currency)} />
 
@@ -231,7 +233,7 @@ export default function ExpenseScreen() {
         onDone={minor => {
           if (fixedFor) {
             const pid = fixedFor.id;
-            setShares(prev => ({ ...prev, [pid]: { weight: minor == null ? prev[pid]?.weight ?? 0 : prev[pid]?.weight || 1, fixed: minor } }));
+            setShares(prev => ({ ...prev, [pid]: { weight: prev[pid]?.weight ?? 0, fixed: minor } }));
           }
           setFixedFor(null);
         }}

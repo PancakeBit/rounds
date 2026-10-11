@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { formatMoney, isCurrencyCode } from '../core/money';
+import { formatMoney, isCurrencyCode, minorDigits } from '../core/money';
 import { hasAnyExpenses } from '../db/repo';
 import { useSettings } from '../state/settings';
 import { Button } from '../ui/Button';
@@ -21,6 +21,16 @@ export default function Settings() {
 
   const code = text.trim().toUpperCase();
   const valid = isCurrencyCode(code);
+  // With rounds logged, only a code with the same decimal places is safe: old amounts keep their meaning.
+  const digitsClash = valid && locked === true && minorDigits(code) !== minorDigits(currency);
+
+  let note: string | null = null;
+  if (locked !== null) {
+    if (!valid) note = 'Use a 3-letter code like USD, EUR, PHP.';
+    else if (digitsClash) note = `Locked to ${minorDigits(currency)} decimal places because rounds are already logged. ${code} uses ${minorDigits(code)}.`;
+    else if (locked) note = `Looks like ${formatMoney(1234, code)}. Rounds are logged, so only codes with ${minorDigits(currency)} decimal places work.`;
+    else note = `Looks like ${formatMoney(1234, code)}`;
+  }
 
   return (
     <View style={styles.body}>
@@ -29,18 +39,14 @@ export default function Settings() {
       <TextInput
         value={text}
         onChangeText={setText}
-        editable={locked === false}
+        editable={locked !== null}
         autoCapitalize="characters"
         maxLength={3}
-        style={[styles.input, locked !== false && styles.locked]}
+        style={[styles.input, locked === null && styles.locked]}
       />
-      {locked === null ? null : locked ? (
-        <Text style={styles.dim}>Locked to {currency} because rounds are already logged. Changing it would change what old amounts mean.</Text>
-      ) : (
-        <Text style={styles.dim}>{valid ? `Looks like ${formatMoney(1234, code)}` : 'Use a 3-letter code like USD, EUR, PHP.'}</Text>
-      )}
-      {locked === false && (
-        <Button label="Save" disabled={!valid || code === currency} onPress={async () => { const ok = await guarded("Couldn't save that", async () => { await setCurrency(code); return true; }); if (ok) router.back(); }} />
+      {note && <Text style={styles.dim}>{note}</Text>}
+      {locked !== null && (
+        <Button label="Save" disabled={!valid || digitsClash || code === currency} onPress={async () => { const ok = await guarded("Couldn't save that", async () => { await setCurrency(code); return true; }); if (ok) router.back(); }} />
       )}
     </View>
   );

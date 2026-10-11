@@ -22,7 +22,7 @@ export function CategoryChips({ value, onChange }: { value: Category; onChange: 
 
 const styles = StyleSheet.create({
   row: { gap: 8, paddingVertical: 4 },
-  chip: { minHeight: 48, paddingHorizontal: 16, borderRadius: theme.radius.md, borderWidth: 2, borderColor: theme.color.line, justifyContent: 'center' },
+  chip: { minHeight: theme.tap, paddingHorizontal: 16, borderRadius: theme.radius.md, borderWidth: 2, borderColor: theme.color.line, justifyContent: 'center' },
   on: { backgroundColor: theme.color.ink, borderColor: theme.color.ink },
   text: { ...theme.type.bodyBold, color: theme.color.ink },
   onText: { color: theme.color.bg },

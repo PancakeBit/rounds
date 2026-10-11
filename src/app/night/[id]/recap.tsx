@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, Share, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
@@ -18,6 +19,7 @@ import { RecapCard } from '../../../ui/RecapCard';
 import { theme } from '../../../ui/theme';
 
 export default function Recap() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const nightId = Number(id);
   const db = useSQLiteContext();
@@ -84,7 +86,7 @@ export default function Recap() {
   if (!night) return null;
   const hasPhotos = night.groupPhoto != null || members.some(m => m.photoStart || m.photoEnd);
   return (
-    <ScrollView contentContainerStyle={styles.body}>
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]}>
       <Stack.Screen options={{ title: 'Recap' }} />
       <View ref={card} collapsable={false} style={styles.capture}>
         <RecapCard night={night} stats={nightStats(expenses)} members={members} money={money} showFaces={showFaces} />
