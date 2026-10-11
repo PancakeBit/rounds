@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -40,7 +40,16 @@ export default function NightScreen() {
       setPaid(settled);
     });
   }, [db, nightId]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoring = useRef(false);
+  useFocusEffect(useCallback(() => {
+    load();
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      setStriking(null);
+    };
+  }, [load]));
 
   if (!night) return null;
   const ended = night.endedAt != null;
@@ -53,7 +62,8 @@ export default function NightScreen() {
     if (striking != null) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setStriking(e.id);
-    setTimeout(async () => {
+    timer.current = setTimeout(async () => {
+      timer.current = null;
       const gone = await guarded("Couldn't wipe that round", () => deleteExpense(db, e.id));
       setStriking(null);
       if (gone) setUndo(gone);
@@ -61,10 +71,13 @@ export default function NightScreen() {
     }, 200);
   }
   async function restore() {
-    if (!undo) return;
-    const ok = await guarded("Couldn't bring that round back", async () => { await saveExpense(db, undo); return true; });
-    if (!ok) return;
+    if (!undo || restoring.current) return;
+    restoring.current = true;
+    const snapshot = undo;
     setUndo(null);
+    const ok = await guarded("Couldn't bring that round back", async () => { await saveExpense(db, snapshot); return true; });
+    restoring.current = false;
+    if (!ok) { setUndo(snapshot); return; }
     load();
   }
 
