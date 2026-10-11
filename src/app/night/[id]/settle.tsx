@@ -32,28 +32,14 @@ export default function SettleUp() {
     setCounts(prev => (prev.at(-1) === left ? prev : [...prev, left]));
   }, []);
 
-  // Regenerating on every focus means edits made since the last visit are reflected,
-  // while transfers already ticked as paid are kept and counted.
-  const load = useCallback(async () => {
-    await guarded("Couldn't load the settle-up", async () => {
-      const data = await getNight(db, nightId);
-      if (!data) return;
-      setTitle(data.night.title);
-      setMembers(data.members);
-      setEnded(data.night.endedAt != null);
-      if (data.night.endedAt == null) await generateSettlements(db, nightId);
-      show(await listSettlements(db, nightId));
-    });
-  }, [db, nightId, show]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const byId = new Map(members.map(m => [m.id, m]));
-
+  const [loaded, setLoaded] = useState(false);
   // One in-flight action at a time, so two quick ticks can't both see "all paid" and end the night twice.
   const busy = useRef(false);
+  const loadedRef = useRef(false);
 
-  // Only marks the night shot once endNight has actually succeeded.
+  // Only marks the night shot once endNight has actually succeeded. Refuses before a good load.
   async function closeNight(): Promise<void> {
+    if (!loadedRef.current) return;
     const ok = await guarded("Couldn't close the night", async () => { await endNight(db, nightId); return true; });
     if (!ok) return;
     setEnded(true);
@@ -61,13 +47,42 @@ export default function SettleUp() {
   }
 
   async function finish() {
-    if (busy.current || ended) return;
+    if (busy.current || ended || !loadedRef.current) return;
     busy.current = true;
     try { await closeNight(); } finally { busy.current = false; }
   }
 
+  // Regenerating on every focus means edits made since the last visit are reflected,
+  // while transfers already ticked as paid are kept and counted.
+  const load = useCallback(async () => {
+    const result = await guarded("Couldn't load the settle-up", async () => {
+      const data = await getNight(db, nightId);
+      if (!data) return undefined;
+      if (data.night.endedAt == null) await generateSettlements(db, nightId);
+      const list = await listSettlements(db, nightId);
+      return { data, list };
+    });
+    if (!result) return;
+    const { data, list } = result;
+    setTitle(data.night.title);
+    setMembers(data.members);
+    setEnded(data.night.endedAt != null);
+    show(list);
+    loadedRef.current = true;
+    setLoaded(true);
+    // A previous close may have failed after the last tick: retry it on focus.
+    if (data.night.endedAt == null && list.length > 0 && list.every(x => x.paidAt != null) && !busy.current) {
+      busy.current = true;
+      try { await closeNight(); } finally { busy.current = false; }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, nightId, show]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const byId = new Map(members.map(m => [m.id, m]));
+
   async function toggle(r: Settlement) {
-    if (ended || busy.current) return;
+    if (ended || busy.current || !loadedRef.current) return;
     busy.current = true;
     try {
       const next = await guarded("Couldn't tick that off", async () => {
@@ -82,6 +97,8 @@ export default function SettleUp() {
     }
   }
 
+  const allPaid = loaded && !ended && rows.length > 0 && rows.every(r => r.paidAt != null);
+
   const recent = counts.slice(-3);
   const firstIndex = counts.length - recent.length;
 
@@ -89,7 +106,9 @@ export default function SettleUp() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Settle up' }} />
       <ScrollView contentContainerStyle={styles.body}>
-        {rows.length === 0 ? (
+        {!loaded ? (
+          <Text style={styles.dim}>Loading…</Text>
+        ) : rows.length === 0 ? (
           <View style={styles.square}>
             <Text style={styles.big}>Nobody owes anybody.</Text>
             {!ended && <Button kind="go" label="Close the night" onPress={finish} />}
@@ -142,6 +161,7 @@ export default function SettleUp() {
             })}
           </>
         )}
+        {allPaid && <Button kind="go" label="Close the night" onPress={finish} />}
         {ended && !shot && <Button kind="ghost" label="See the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />}
       </ScrollView>
       <AllSquare visible={shot} line={`${title} is settled.`}>
