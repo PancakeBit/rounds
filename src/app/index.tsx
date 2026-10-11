@@ -5,6 +5,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { getActiveNight, listCrew, listPastNights, type Night, type Person } from '../db/repo';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
+import { guarded } from '../ui/oops';
 import { theme } from '../ui/theme';
 
 export default function Home() {
@@ -14,16 +15,16 @@ export default function Home() {
   const [crew, setCrew] = useState<Person[]>([]);
 
   useFocusEffect(useCallback(() => {
-    (async () => {
+    guarded("Couldn't load the board", async () => {
       setActive(await getActiveNight(db));
       setPast(await listPastNights(db));
       setCrew(await listCrew(db));
-    })();
+    });
   }, [db]));
 
   return (
     <ScrollView contentContainerStyle={styles.body}>
-      <Stack.Screen options={{ title: 'Rounds', headerRight: () => <Link href="/settings" style={styles.gear} accessibilityLabel="Settings">⚙️</Link> }} />
+      <Stack.Screen options={{ title: 'Rounds', headerRight: () => <Link href="/settings" style={styles.gear} accessibilityRole="button" accessibilityLabel="Settings">⚙️</Link> }} />
 
       {active ? (
         <Pressable style={styles.active} onPress={() => router.push(`/night/${active.id}`)}>
@@ -37,7 +38,7 @@ export default function Home() {
 
       <View style={styles.rowHead}>
         <Text style={styles.h2}>The crew</Text>
-        <Link href="/crew" style={styles.link}>Edit</Link>
+        <Link href="/crew" style={styles.link} accessibilityRole="button">Edit</Link>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crew}>
         {crew.map(p => <Avatar key={p.id} person={p} size={56} showName />)}
@@ -58,7 +59,7 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   body: { padding: 20, gap: 16 },
-  gear: { fontSize: 26, padding: 8 },
+  gear: { fontSize: 26, minWidth: theme.tap, minHeight: theme.tap, textAlign: 'center', textAlignVertical: 'center' },
   start: { minHeight: 96 },
   active: { backgroundColor: theme.color.accent, borderRadius: theme.radius.lg, padding: 24 },
   kicker: { ...theme.type.label, color: theme.color.bg },
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
   activeHint: { ...theme.type.body, color: theme.color.bg },
   rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   h2: { ...theme.type.title, color: theme.color.ink },
-  link: { ...theme.type.bodyBold, color: theme.color.accent, padding: 8 },
+  link: { ...theme.type.bodyBold, color: theme.color.accent, minWidth: theme.tap, minHeight: theme.tap, textAlign: 'center', textAlignVertical: 'center' },
   crew: { gap: 12 },
   dim: { ...theme.type.body, color: theme.color.inkDim },
   pastRow: {

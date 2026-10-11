@@ -5,6 +5,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { addPerson, listCrew, setArchived, updatePerson, type Person } from '../db/repo';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
+import { guarded } from '../ui/oops';
 import { CREW_COLORS, CREW_EMOJI, theme } from '../ui/theme';
 
 const lookAt = (i: number) => ({ emoji: CREW_EMOJI[i % CREW_EMOJI.length], color: CREW_COLORS[i % CREW_COLORS.length] });
@@ -14,13 +15,15 @@ export default function Crew() {
   const [people, setPeople] = useState<Person[]>([]);
   const [name, setName] = useState('');
   const [look, setLook] = useState(0);
+  const [rev, setRev] = useState(0);
 
-  const load = useCallback(async () => setPeople(await listCrew(db, true)), [db]);
+  const load = useCallback(async () => { await guarded("Couldn't load the board", async () => setPeople(await listCrew(db, true))); }, [db]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function add() {
     if (!name.trim()) return;
-    await addPerson(db, { name, ...lookAt(look) });
+    const ok = await guarded("Couldn't save that", () => addPerson(db, { name, ...lookAt(look) }));
+    if (ok === undefined) return;
     setName('');
     setLook(l => l + 1);
     load();
@@ -28,13 +31,14 @@ export default function Crew() {
 
   async function reshuffle(p: Person) {
     const i = CREW_EMOJI.indexOf(p.emoji);
-    await updatePerson(db, p.id, { name: p.name, ...lookAt(i + 1) });
+    await guarded("Couldn't update the crew", () => updatePerson(db, p.id, { name: p.name, ...lookAt(i + 1) }));
     load();
   }
 
   async function rename(p: Person, next: string) {
-    if (!next.trim() || next.trim() === p.name) return load();
-    await updatePerson(db, p.id, { name: next, emoji: p.emoji, color: p.color });
+    if (!next.trim() || next.trim() === p.name) { setRev(r => r + 1); return load(); }
+    await guarded("Couldn't update the crew", () => updatePerson(db, p.id, { name: next, emoji: p.emoji, color: p.color }));
+    setRev(r => r + 1);
     load();
   }
 
@@ -42,7 +46,7 @@ export default function Crew() {
     <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'The crew' }} />
       <View style={styles.addRow}>
-        <Pressable onPress={() => setLook(l => l + 1)} accessibilityLabel="Shuffle emoji and colour">
+        <Pressable style={styles.shuffle} accessibilityRole="button" onPress={() => setLook(l => l + 1)} accessibilityLabel="Shuffle emoji and colour">
           <Avatar person={{ name, ...lookAt(look) }} size={56} />
         </Pressable>
         <TextInput
@@ -61,16 +65,17 @@ export default function Crew() {
 
       {people.map(p => (
         <View key={p.id} style={styles.row}>
-          <Pressable onPress={() => reshuffle(p)} accessibilityLabel={`Shuffle ${p.name}'s look`}>
+          <Pressable style={styles.shuffle} accessibilityRole="button" onPress={() => reshuffle(p)} accessibilityLabel={`Shuffle ${p.name}'s look`}>
             <Avatar person={p} dimmed={p.archived} />
           </Pressable>
           <TextInput
+            key={`${p.id}-${rev}`}
             defaultValue={p.name}
             onEndEditing={e => rename(p, e.nativeEvent.text)}
             style={[styles.name, p.archived && styles.dimName]}
             maxLength={20}
           />
-          <Button kind="ghost" label={p.archived ? 'Bring back' : 'Retire'} onPress={async () => { await setArchived(db, p.id, !p.archived); load(); }} />
+          <Button kind="ghost" label={p.archived ? 'Bring back' : 'Retire'} onPress={async () => { await guarded("Couldn't update the crew", () => setArchived(db, p.id, !p.archived)); load(); }} />
         </View>
       ))}
     </ScrollView>
@@ -84,6 +89,7 @@ const styles = StyleSheet.create({
     flex: 1, minHeight: theme.tap, ...theme.type.body, color: theme.color.ink, backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md, paddingHorizontal: 16,
   },
+  shuffle: { minWidth: theme.tap, minHeight: theme.tap, alignItems: 'center', justifyContent: 'center' },
   dim: { ...theme.type.small, color: theme.color.inkDim },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   name: { flex: 1, ...theme.type.bodyBold, color: theme.color.ink, minHeight: theme.tap },

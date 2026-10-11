@@ -9,8 +9,9 @@ import { theme } from '../ui/theme';
 
 export default function RootLayout() {
   // The keys become the family names that theme.face refers to.
-  const [fontsLoaded] = useFonts({ BigShouldersDisplay_700Bold, BigShouldersDisplay_900Black, Barlow_500Medium, Barlow_700Bold });
-  if (!fontsLoaded) return null;
+  const [fontsLoaded, fontError] = useFonts({ BigShouldersDisplay_700Bold, BigShouldersDisplay_900Black, Barlow_500Medium, Barlow_700Bold });
+  if (fontError) console.warn('Font load failed, using system fonts', fontError);
+  if (!fontsLoaded && !fontError) return null;
   return (
     <SQLiteProvider databaseName="rounds.db" onInit={migrate}>
       <SettingsProvider>
