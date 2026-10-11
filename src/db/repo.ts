@@ -102,6 +102,14 @@ export async function startNight(db: SQLiteDatabase, title: string, memberIds: n
   return id;
 }
 
+// The name is only a label, so it can change any time, closed nights included.
+export async function renameNight(db: SQLiteDatabase, nightId: number, title: string): Promise<void> {
+  const t = title.trim();
+  if (!t) throw new Error('Give it a name');
+  const r = await db.runAsync('UPDATE nights SET title = ? WHERE id = ?', t.slice(0, 40), nightId);
+  if (r.changes === 0) throw new Error('That one is already gone');
+}
+
 // A late arrival joins a night that is already running. Earlier payments keep their stored shares.
 export async function addNightMember(db: SQLiteDatabase, nightId: number, personId: number): Promise<void> {
   await db.withTransactionAsync(async () => {

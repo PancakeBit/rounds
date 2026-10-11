@@ -7,12 +7,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { balanceHistory } from '../../../core/balances';
 import { categoryEmoji, categoryLabel } from '../../../core/categories';
 import {
-  deleteExpense, getNight, listExpenses, listSettlements, saveExpense,
+  deleteExpense, getNight, listExpenses, listSettlements, renameNight, saveExpense,
   type Expense, type ExpenseInput, type Night, type NightMember, type Settlement,
 } from '../../../db/repo';
 import { formatMoney as money } from '../../../core/money';
 import { Button } from '../../../ui/Button';
 import { Circled, Land, ScoreColumn, Strike } from '../../../ui/chalk';
+import { NameModal } from '../../../ui/NameModal';
 import { guarded } from '../../../ui/oops';
 import { Snackbar } from '../../../ui/Snackbar';
 import { Enter, Tap } from '../../../ui/Tap';
@@ -34,6 +35,7 @@ export default function NightScreen() {
   const [paid, setPaid] = useState<Settlement[]>([]);
   const [undo, setUndo] = useState<ExpenseInput | null>(null);
   const [striking, setStriking] = useState<number | null>(null);
+  const [naming, setNaming] = useState(false);
 
   const load = useCallback(async () => {
     await guarded("Couldn't load the board", async () => {
@@ -88,9 +90,25 @@ export default function NightScreen() {
     load();
   }
 
+  async function rename(title: string) {
+    setNaming(false);
+    await guarded("Couldn't rename it", () => renameNight(db, nightId, title));
+    load();
+  }
+
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: night.title }} />
+      <Stack.Screen
+        options={{
+          title: night.title,
+          headerTitle: () => (
+            <Tap onPress={() => setNaming(true)} accessibilityRole="button" accessibilityLabel={`${night.title}, rename`} style={styles.titleTap}>
+              <Text style={styles.titleText} numberOfLines={1}>{night.title}</Text>
+              <Text style={styles.titlePen}>✎</Text>
+            </Tap>
+          ),
+        }}
+      />
       <FlatList
         data={[...expenses].reverse()}
         keyExtractor={e => String(e.id)}
@@ -156,6 +174,7 @@ export default function NightScreen() {
         </View>
       )}
       {ended && <Text style={[styles.closed, { bottom: 28 + insets.bottom }]}>All square. This night is closed.</Text>}
+      <NameModal visible={naming} initial={night.title} onDone={rename} onClose={() => setNaming(false)} />
       <Snackbar visible={undo != null} message="Removed" action="Undo" onAction={restore} onHide={() => setUndo(null)} bottomOffset={PANEL_H + 12} />
     </View>
   );
@@ -163,6 +182,9 @@ export default function NightScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  titleTap: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: theme.tap, flexShrink: 1 },
+  titleText: { fontFamily: theme.face.displayBold, fontSize: theme.font.title, color: theme.color.ink, flexShrink: 1 },
+  titlePen: { ...theme.type.body, color: theme.color.inkDim },
   list: { padding: 16, paddingBottom: 120, gap: 8 },
   header: { gap: 12, marginBottom: 4 },
   kicker: { ...theme.type.label, color: theme.color.inkDim },

@@ -11,9 +11,9 @@ Updated 2026-10-12 after the first device run. Changes from that feedback: plain
 
 ## A full night
 
-5. Start a night with Jo, Sam and Kai. The line-up now has a **Group shot** tile at the start too. Snap Jo and Sam, leave Kai, take a start group shot, and tap Done.
+5. Start a night: tap the name under **Name the night** (it says e.g. `Monday night`). The whole name selects, so typing replaces it. Type `Karaoke outing!`. Pick Jo, Sam and Kai. The line-up now has a **Group shot** tile at the start too. Snap Jo and Sam, leave Kai, take a start group shot, and tap Done.
    - **Check:** are the front-camera photos mirrored or rotated compared with the preview?
-6. The night screen: the bottom panel has **Someone paid**, then **Settle up** below it with a clear gap. The top row has Faces, Add someone and Recap.
+6. The night screen: the top bar reads `Karaoke outing! ✎`. Tap it → "Name the night" box, change it to `Kai's birthday outing!`, Save. The top bar updates; back on Home it shows the new name too. Cancel leaves it alone, and Save is greyed out when the box is empty. The bottom panel has **Someone paid**, then **Settle up** below it with a clear gap. The top row has Faces, Add someone and Recap.
 7. Tap Someone paid for each of these, and check the columns after each one.
    1. Jo pays `30`, Drinks, everyone at 1 → Jo `+20.00`, Sam `-10.00`, Kai `-10.00`. Each digit pops as you type it.
    2. Type `9999999.99`: the amount shrinks to fit and doesn't overflow. Clear it.
@@ -53,7 +53,7 @@ Updated 2026-10-12 after the first device run. Changes from that feedback: plain
       - both group shots and no faces
       - everything
     - The same night always opens on the same layout, and different nights open on different ones.
-17. A past night is read-only: no bottom panel and no Add someone.
+17. A past night is read-only: no bottom panel and no Add someone. Its name can still be changed from the top bar.
 
 ## Phone settings
 

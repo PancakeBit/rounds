@@ -62,7 +62,18 @@ export default function NewNight() {
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 20 + insets.bottom }]} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'New night' }} />
-      <TextInput value={title} onChangeText={setTitle} style={styles.title} maxLength={40} accessibilityLabel="Night name" />
+      <Text style={styles.h2}>Name the night</Text>
+      <TextInput
+        value={title}
+        onChangeText={setTitle}
+        selectTextOnFocus
+        placeholder="Karaoke outing!"
+        placeholderTextColor={theme.color.inkDim}
+        style={styles.title}
+        maxLength={40}
+        returnKeyType="done"
+        accessibilityLabel="Night name"
+      />
       <Text style={styles.h2}>Who's out?</Text>
       <View style={styles.grid}>
         {crew.map(p => (
@@ -101,7 +112,10 @@ export default function NewNight() {
 
 const styles = StyleSheet.create({
   body: { padding: 20, gap: 16 },
-  title: { ...theme.type.display, color: theme.color.ink, minHeight: theme.tap },
+  title: {
+    ...theme.type.display, color: theme.color.ink, minHeight: theme.tap,
+    borderBottomWidth: 3, borderColor: theme.color.accent, paddingVertical: 4,
+  },
   h2: { ...theme.type.title, color: theme.color.ink },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   pick: { minWidth: theme.tap, minHeight: theme.tap, padding: 8, borderRadius: theme.radius.md, borderWidth: 3, borderColor: 'transparent' },
