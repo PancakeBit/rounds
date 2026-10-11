@@ -1,54 +1,52 @@
-# Rounds: device checklist for v1
+# Rounds: device checklist
 
-No phone or emulator was attached during the build. Everything below compiles and passes 57 unit tests, but has not run on Android yet. Run through this once on your phone after installing the signed APK. Numbers assume USD.
+Updated 2026-10-12 after the first device run. Changes from that feedback: plain numbers with no currency, an "Extra" per person, several nights open at once, the "Someone paid" wording, Settle up at the very bottom, and press animations. Amounts below are plain numbers.
 
 ## Setup
 
-1. Install: `~/Android/Sdk/platform-tools/adb install -r dist/rounds.apk`, or copy `dist/rounds.apk` to the phone and open it.
-2. The app opens on Home in slate and chalk, with Big Shoulders headings and Barlow body text, and a "Start a night" button.
-3. Crew: add Jo, Sam, Kai and Mia. Tap a face to shuffle it. Rename one. Retire one: they drop off the Home crew strip. Bring them back.
-4. Settings: set the currency to `PHP` and save. The preview reads like `₱12.34`. Set it back to `USD`.
+1. Install over the old version: `~/Android/Sdk/platform-tools/adb install -r dist/rounds.apk`. It must install over the old one, not fail with a signature mismatch. Old nights must still be there, with the same balances.
+2. Home: slate and chalk, no gear icon, and a "Start a night" button that is always there.
+3. **Press feel:** tap anything. It sinks at once, springs back with a small bounce, and a ring bursts outward and fades. You feel a light tick on every touch.
+4. Crew: add Jo, Sam, Kai and Mia. Shuffle a face, rename one, retire one, then bring them back.
 
 ## A full night
 
-5. Start a night with Jo, Sam and Kai. The line-up opens. Allow the camera. Snap Jo with the front camera inside the ring, then Sam. Leave Kai. Tap Done.
-   - Expect the scoreboard: `$0` tab, Jo and Sam with photos, Kai with an emoji, every column `$0 square`.
-   - **Check:** are the front-camera photos mirrored or rotated compared with the preview? Rotated faces would end up on the shared recap.
-6. Chalk up these rounds and check the columns after each one. The old figure gets a chalk strike and the new one drops in.
-   1. Jo pays `30`, Drinks, everyone at 1 share → Jo `+$20`, Sam `−$10`, Kai `−$10`.
-   2. Sam pays `10`, everyone at 1 → the preview shows `3.34 / 3.33 / 3.33` and `33%` each.
-   3. Kai pays `60`, Food. Long-press Sam and set exactly `30`. Jo and Kai stay at 1 → preview Sam `30.00`, Jo `15.00`, Kai `15.00`.
-   4. Sam pays `12` with **On me** → balances don't change, and the round shows a circled ON ME.
-   5. Jo pays `8`, taps **For Sam** → the other steppers drop to 0, Sam shows `100%`. Save: Jo `+$8` more, Sam `−$8` more.
-7. Edge cases on the round screen:
-   - With "For Sam" lit and Jo paying, switch the payer to Sam → everyone goes back to 1 share.
-   - Set Kai to 0, long-press Kai, choose "No fixed amount" → Kai stays out. Set an exact amount on Kai, then clear it → Kai is out again.
-   - Set exactly `100` on a `60` bill → "Fixed amounts exceed the bill", and Save is disabled.
-   - Set every stepper to 0 → "Nobody is splitting the rest".
-   - Double-tap Save → only one round is created.
-8. Tap round 1, change it to `36` and save: the balances update. Hold round 2: chalk strike, it's wiped, and the Undo bar appears **above** the "Chalk up a round" bar. Tap Undo: the round comes back with the same split.
-9. **Late arrival:** tap Add someone and add Mia. Her column reads `$0 square`, and earlier rounds don't include her. Log a round and Mia is in by default. Add someone again: Mia is no longer offered.
-10. Settings: the currency now says only codes with the same decimal places work. USD → EUR saves; USD → JPY shows the "Locked to 2 decimal places" message. Set it back to USD.
+5. Start a night with Jo, Sam and Kai. Snap Jo and Sam, leave Kai, and tap Done.
+   - **Check:** are the front-camera photos mirrored or rotated compared with the preview?
+6. The night screen: the bottom panel has **Someone paid**, then **Settle up** below it with a clear gap. The top row has Faces, Add someone and Recap.
+7. Tap Someone paid for each of these, and check the columns after each one.
+   1. Jo pays `30`, Drinks, everyone at 1 → Jo `+20.00`, Sam `-10.00`, Kai `-10.00`. Each digit pops as you type it.
+   2. Type `9999999.99`: the amount shrinks to fit and doesn't overflow. Clear it.
+   3. Sam pays `10`, everyone at 1 → the preview reads `3.34 / 3.33 / 3.33`.
+   4. **One extra item:** Kai pays `60`. Tap **+ Extra** on Sam and set `15`. Everyone stays at 1 → Sam `30.00`, Jo `15.00`, Kai `15.00`. The line under the list reads "Extras 15.00 · the other 45.00 split between 3".
+   5. **Different orders:** Jo pays `100`. Set extras Jo `30`, Sam `20` and Kai `10`, with everyone at 1 → Jo `43.34`, Sam `33.33`, Kai `23.33`. The leftover 40 is split evenly.
+   6. **Only their own thing:** with an extra on Sam, press − on Sam until it shows 0 → Sam pays only their extra.
+   7. Sam pays `12` with **On me** → balances don't change, and the item shows a circled ON ME.
+   8. Jo pays `8` and taps **For Sam** → the other shares drop to 0, and Sam shows `100%`.
+8. Edge cases on that screen:
+   - With "For Sam" lit and Jo paying, switch the payer to Sam → everyone goes back to 1.
+   - Extras adding up to more than the bill → "Extras add up to more than the bill", and Save is disabled.
+   - Every share at 0 with no extras → "Nobody is sharing the rest".
+   - Tap **+ Extra**, then **No extra** → the extra is cleared.
+   - Double-tap Save → only one item is created.
+9. Tap an item, change it to `36` and save: the balances update. Hold an item: chalk strike, it's removed, and "Removed · Undo" appears **above** the bottom panel. Tap Undo and it comes back.
+10. **Late arrival:** Add someone → Mia. Her column reads `0.00 square`, and new items include her.
+
+## Several nights open
+
+11. Go back to Home. "Still open" shows tonight with what's still unpaid. Tap **Start a night** and start a second one with Jo and Mia. Home now lists both.
+12. Log something on the second night. Go back: each open night shows its own unpaid figure.
 
 ## Settle up and the finish
 
-11. Tap Settle up. Hand-check that the transfers clear the scoreboard balances. The big number equals the number of rows.
-12. Tick one transfer: the big number gets a chalk strike and the next one drops in. Go back, edit a round's amount, and return. The ticked row is still ticked and the others are recomputed, so nobody pays twice.
-13. Tick every row: the night stays **open**, and "Everyone's paid. Close the night when you're done." appears with a green button. Untick one and the button hides. Tick it again, then tap **Close the night** → green ALL SQUARE, a chalk-dust puff, two haptic thunks.
-14. On ALL SQUARE, tap "One more for the board". Snap Jo and Kai, then the group shot with the back camera. Done opens the recap.
-15. Recap:
-    - Check the total, Big Spender, Most Generous, The Sponge and the category bars.
-    - Faces: there's a start row and an end row, missing photos show an emoji, and the group shot appears.
-    - **Hide faces** switches it to emoji.
-    - **Send to the group**: send it to a chat and confirm the image is complete and legible. Send it once with faces and once with them hidden.
-    - **Send as text**: check the round lines (`everyone`, `for Sam`, `on me`) and `(paid)` on the ticked transfers.
-16. Back to Home: no active night, and the night is under Past nights. Open it: it's read-only, with no "Chalk up a round", no "Add someone", and rounds aren't tappable.
-17. Retire Kai on Crew, then reopen that past night: Kai is still there with his balance.
+13. On the first night, tap Settle up. The transfers clear the scoreboard balances. Tick one: the big number gets a strike and the next one drops in.
+14. Leave it half-ticked, kill the app, and reopen it. The night is still under Still open, and the ticks are kept.
+15. Tick the rest, then **Close the night** → ALL SQUARE, chalk dust, two haptic thunks. The night moves to Past nights, and the other night stays open.
+16. Recap: the faces rows, Hide faces, and Send to the group (once with faces, once without). **Send as text** shows extras as `Sam +15.00` and lists the items under "What got paid".
+17. A past night is read-only: no bottom panel and no Add someone.
 
 ## Phone settings
 
-18. **Navigation bar:** with 3-button navigation and again with gesture navigation, nothing sits under the bar. That covers the "Chalk up a round" bar, the Undo bar, the camera shutter, and the last button on every scrolling screen.
-19. **Remove animations** (Accessibility): repeat a tick on Settle up. Figures swap instantly, strikes appear fully drawn, and ALL SQUARE shows with no dust. Turn it back off.
-20. **Camera denied:** run `adb shell pm revoke com.joshua.rounds android.permission.CAMERA`, then open Faces and tap a face. You see the "needs the camera" screen, and "Skip, keep the emoji" works. Deny twice and the screen points to Android settings.
-21. Swipe the app away and reopen it. The active night, rounds and photos are all still there.
-22. Install a rebuilt APK over it with `adb install -r`. It must install over the old one, not fail with a signature mismatch.
+18. **Navigation bar:** with 3-button navigation and again with gestures, nothing sits under the bar. That covers the bottom panel, the Undo bar, the camera shutter, and the last button on each scrolling screen.
+19. **Remove animations** (Accessibility): taps still give the haptic but don't sink or ring, rows appear without dropping in, and ALL SQUARE has no dust.
+20. **Camera denied:** run `adb shell pm revoke com.joshua.rounds android.permission.CAMERA`, then tap a face → the "needs the camera" screen, and Skip works.

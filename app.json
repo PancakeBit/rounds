@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rounds",
     "slug": "rounds",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -22,7 +22,8 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,12 +34,15 @@
       "expo-sqlite",
       "expo-sharing",
       "expo-font",
-      ["expo-camera", {
-        "cameraPermission": "Rounds uses the camera for optional photos of the crew. They stay on this phone.",
-        "microphonePermission": false,
-        "recordAudioAndroid": false,
-        "barcodeScannerEnabled": false
-      }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Rounds uses the camera for optional photos of the crew. They stay on this phone.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ]
     ],
     "scheme": "rounds"
   }
