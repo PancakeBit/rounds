@@ -107,9 +107,10 @@ export default function NightScreen() {
               ))}
             </ScrollView>
             <View style={styles.actions}>
-              {!ended && <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} style={styles.flex} />}
+              {!ended && <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} style={styles.actionFlex} />}
               <Button kind="ghost" label="Faces" onPress={() => router.push(`/night/${nightId}/lineup?phase=${ended ? 'end' : 'start'}&then=back`)} />
-              <Button kind="ghost" label="Recap" onPress={() => router.push(`/night/${nightId}/recap`)} style={styles.flex} />
+              {!ended && <Button kind="ghost" label="Add someone" onPress={() => router.push(`/night/${nightId}/join`)} />}
+              <Button kind="ghost" label="Recap" onPress={() => router.push(`/night/${nightId}/recap`)} style={styles.actionFlex} />
             </View>
             {expenses.length === 0 && <Text style={styles.dim}>Board's clean. Chalk up the first round.</Text>}
             {expenses.length > 0 && !ended && <Text style={styles.dim}>Tap a round to edit it · hold to wipe it off</Text>}
@@ -162,8 +163,9 @@ const styles = StyleSheet.create({
   kicker: { ...theme.type.label, color: theme.color.inkDim },
   tab: { ...theme.type.hero, color: theme.color.ink, marginTop: -12 },
   board: { borderTopWidth: 2, borderBottomWidth: 2, borderColor: theme.color.line },
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   flex: { flex: 1 },
+  actionFlex: { flex: 1, minWidth: 110 },
   exp: {
     minHeight: theme.tap, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md, paddingHorizontal: 14, paddingVertical: 10,

@@ -90,6 +90,18 @@ export async function startNight(db: SQLiteDatabase, title: string, memberIds: n
   return id;
 }
 
+// A late arrival joins a night that is already running. Earlier rounds keep their stored shares.
+export async function addNightMember(db: SQLiteDatabase, nightId: number, personId: number): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await assertOpen(db, nightId);
+    const exists = await db.getFirstAsync<{ one: number }>(
+      'SELECT 1 AS one FROM night_members WHERE night_id = ? AND person_id = ?', nightId, personId,
+    );
+    if (exists) throw new Error("They're already in tonight");
+    await db.runAsync('INSERT INTO night_members (night_id, person_id) VALUES (?, ?)', nightId, personId);
+  });
+}
+
 // Members are returned whether or not they are archived: old nights must still show retired friends.
 export async function getNight(db: SQLiteDatabase, id: number): Promise<{ night: Night; members: NightMember[] } | null> {
   const r = await db.getFirstAsync<NightRow>('SELECT * FROM nights WHERE id = ?', id);
