@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { defaultLayout, fittingLayouts, nextLayout, type Shots } from './collage';
+import { defaultLayout, fittingLayouts, nextLayout, shotsOf, type Shots } from './collage';
 
 const shots = (s: Partial<Shots>): Shots => ({ startGroup: false, endGroup: false, startFaces: 0, endFaces: 0, pairs: 0, ...s });
 
@@ -72,5 +72,17 @@ describe('nextLayout', () => {
         return d !== null && fit.includes(d) && fit.includes(nextLayout(s, d));
       },
     ));
+  });
+});
+
+describe('shotsOf', () => {
+  it('counts group shots, faces per phase and people with both', () => {
+    const m = (photoStart: string | null, photoEnd: string | null) => ({ photoStart, photoEnd });
+    expect(shotsOf({ groupPhotoStart: null, groupPhoto: 'file://end.jpg' }, [m('a', 'b'), m('c', null), m(null, 'd'), m(null, null)])).toEqual({
+      startGroup: false, endGroup: true, startFaces: 2, endFaces: 2, pairs: 1,
+    });
+  });
+  it('an empty night has nothing', () => {
+    expect(shotsOf({ groupPhotoStart: null, groupPhoto: null }, [])).toEqual(shots({}));
   });
 });

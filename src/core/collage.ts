@@ -57,3 +57,18 @@ export function nextLayout(s: Shots, current: LayoutId): LayoutId {
   const i = c.indexOf(current);
   return c[(i + 1) % c.length];
 }
+
+// Structural, so this stays free of the db and RN imports.
+interface ShotNight { groupPhotoStart: string | null; groupPhoto: string | null }
+interface ShotMember { photoStart: string | null; photoEnd: string | null }
+
+// Counts the photos a night actually has. `groupPhoto` is the end-of-night group shot.
+export function shotsOf(night: ShotNight, members: ShotMember[]): Shots {
+  return {
+    startGroup: !!night.groupPhotoStart,
+    endGroup: !!night.groupPhoto,
+    startFaces: members.filter(m => m.photoStart).length,
+    endFaces: members.filter(m => m.photoEnd).length,
+    pairs: members.filter(m => m.photoStart && m.photoEnd).length,
+  };
+}
