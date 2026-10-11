@@ -60,6 +60,7 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
           paid_at INTEGER
         );
         CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+        CREATE UNIQUE INDEX one_active_night ON nights (ifnull(ended_at, 0)) WHERE ended_at IS NULL;
       `);
     }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);

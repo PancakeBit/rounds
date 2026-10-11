@@ -15,7 +15,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrencyState] = useState<string | null>(null);
 
   useEffect(() => {
-    getSetting(db, 'currency').then(v => setCurrencyState(v ?? 'USD'));
+    getSetting(db, 'currency')
+      .then(v => setCurrencyState(v ?? 'USD'))
+      .catch(e => {
+        console.warn('Could not read the currency setting, using USD', e);
+        setCurrencyState('USD');
+      });
   }, [db]);
 
   const setCurrency = useCallback(async (code: string) => {

@@ -74,11 +74,17 @@ export async function listPastNights(db: SQLiteDatabase): Promise<Night[]> {
 
 export async function startNight(db: SQLiteDatabase, title: string, memberIds: number[]): Promise<number> {
   if (memberIds.length < 2) throw new Error('A night needs at least two people');
-  if (await getActiveNight(db)) throw new Error('A night is already running. Settle it first.');
+  const running = 'A night is already running. Settle it first.';
   let id = 0;
   await db.withTransactionAsync(async () => {
-    const r = await db.runAsync('INSERT INTO nights (title, started_at) VALUES (?, ?)', title.trim() || 'Night out', Date.now());
-    id = r.lastInsertRowId;
+    if (await getActiveNight(db)) throw new Error(running);
+    try {
+      const r = await db.runAsync('INSERT INTO nights (title, started_at) VALUES (?, ?)', title.trim() || 'Night out', Date.now());
+      id = r.lastInsertRowId;
+    } catch (e) {
+      if (String(e instanceof Error ? e.message : e).includes('UNIQUE')) throw new Error(running);
+      throw e;
+    }
     for (const pid of memberIds) await db.runAsync('INSERT INTO night_members (night_id, person_id) VALUES (?, ?)', id, pid);
   });
   return id;
@@ -150,7 +156,14 @@ async function assertOpen(db: SQLiteDatabase, nightId: number) {
 export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Promise<number> {
   const check = splitExpense(input.amount, input.shares);
   if (!check.ok) throw new Error(check.error);
-  await assertOpen(db, input.nightId);
+  if (input.id != null) {
+    const existing = await db.getFirstAsync<{ night_id: number }>('SELECT night_id FROM expenses WHERE id = ?', input.id);
+    if (!existing) throw new Error('That round is already gone');
+    if (existing.night_id !== input.nightId) throw new Error('That round belongs to a different night');
+    await assertOpen(db, existing.night_id);
+  } else {
+    await assertOpen(db, input.nightId);
+  }
   let id = input.id ?? 0;
   await db.withTransactionAsync(async () => {
     if (input.id != null) {
