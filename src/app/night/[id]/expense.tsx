@@ -85,6 +85,14 @@ export default function ExpenseScreen() {
     setShares(Object.fromEntries(members.map(m => [m.id, { weight: m.id === personId ? 1 : 0, fixed: null }])));
   }
 
+  // A "just for X" round can't be paid by X: put everyone back in rather than leave a self-only round.
+  function changePayer(personId: number) {
+    setPayerId(personId);
+    if (soloFor === personId) {
+      setShares(Object.fromEntries(members.map(m => [m.id, { weight: 1, fixed: null }])));
+    }
+  }
+
   function step(personId: number, delta: number) {
     setShares(prev => {
       const cur = prev[personId] ?? { weight: 0, fixed: null };
@@ -121,7 +129,7 @@ export default function ExpenseScreen() {
           {members.map(m => (
             <Pressable
               key={m.id}
-              onPress={() => setPayerId(m.id)}
+              onPress={() => changePayer(m.id)}
               accessibilityRole="radio"
               accessibilityLabel={`${m.name} paid`}
               accessibilityState={{ selected: payerId === m.id }}
@@ -223,7 +231,7 @@ export default function ExpenseScreen() {
         onDone={minor => {
           if (fixedFor) {
             const pid = fixedFor.id;
-            setShares(prev => ({ ...prev, [pid]: { weight: prev[pid]?.weight || 1, fixed: minor } }));
+            setShares(prev => ({ ...prev, [pid]: { weight: minor == null ? prev[pid]?.weight ?? 0 : prev[pid]?.weight || 1, fixed: minor } }));
           }
           setFixedFor(null);
         }}
