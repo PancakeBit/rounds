@@ -53,7 +53,7 @@ export default function NewNight() {
     const id = await guarded("Couldn't start the night", () => startNight(db, title, [...picked]));
     setBusy(false);
     if (id === undefined) return;
-    router.replace(`/night/${id}`);
+    router.replace(`/night/${id}/lineup?phase=start`);
   }
 
   return (

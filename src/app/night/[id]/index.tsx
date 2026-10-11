@@ -104,6 +104,7 @@ export default function NightScreen() {
             </ScrollView>
             <View style={styles.actions}>
               {!ended && <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} style={styles.flex} />}
+              <Button kind="ghost" label="Faces" onPress={() => router.push(`/night/${nightId}/lineup?phase=${ended ? 'end' : 'start'}&then=back`)} />
               <Button kind="ghost" label="Recap" onPress={() => router.push(`/night/${nightId}/recap`)} style={styles.flex} />
             </View>
             {expenses.length === 0 && <Text style={styles.dim}>Board's clean. Chalk up the first round.</Text>}

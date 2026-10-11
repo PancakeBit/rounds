@@ -165,7 +165,8 @@ export default function SettleUp() {
         {ended && !shot && <Button kind="ghost" label="See the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />}
       </ScrollView>
       <AllSquare visible={shot} line={`${title} is settled.`}>
-        <Button kind="dark" label="See the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />
+        <Button kind="dark" label="One more for the board" onPress={() => router.replace(`/night/${nightId}/lineup?phase=end`)} />
+        <Button kind="dark" label="Straight to the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />
       </AllSquare>
     </View>
   );

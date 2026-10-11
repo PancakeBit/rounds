@@ -27,7 +27,13 @@
       "expo-status-bar",
       "expo-sqlite",
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      ["expo-camera", {
+        "cameraPermission": "Rounds uses the camera for optional photos of the crew. They stay on this phone.",
+        "microphonePermission": false,
+        "recordAudioAndroid": false,
+        "barcodeScannerEnabled": false
+      }]
     ],
     "scheme": "rounds"
   }
