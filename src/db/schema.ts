@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const LATEST = 3;
+const LATEST = 4;
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -92,6 +92,28 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (row.user_version < 3) {
       // v3: a group shot can open the night too. The old group_photo is the end-of-night one.
       await db.execAsync('ALTER TABLE nights ADD COLUMN group_photo_start TEXT;');
+    }
+    if (row.user_version < 4) {
+      // v4: a payment can be broken into items that people claim. Shares still hold the result,
+      // so balances never read these tables; they are kept so the list can be opened and changed.
+      await db.execAsync(`
+        ALTER TABLE expenses ADD COLUMN service_minor INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE expense_items (
+          id INTEGER PRIMARY KEY NOT NULL,
+          expense_id INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          name TEXT NOT NULL DEFAULT '',
+          price_minor INTEGER NOT NULL CHECK (price_minor > 0)
+        );
+        CREATE TABLE item_claims (
+          item_id INTEGER NOT NULL REFERENCES expense_items(id) ON DELETE CASCADE,
+          person_id INTEGER NOT NULL REFERENCES people(id),
+          count INTEGER NOT NULL CHECK (count > 0),
+          position INTEGER NOT NULL,
+          PRIMARY KEY (item_id, person_id)
+        );
+        CREATE INDEX expense_items_by_expense ON expense_items (expense_id, position);
+      `);
     }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);
   });

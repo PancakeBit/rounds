@@ -6,6 +6,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import type { Category } from '../../../core/categories';
 import { formatMoney as money, minorToInput, parseMoney } from '../../../core/money';
+import { itemShares, splitItems, type ItemInput } from '../../../core/items';
 import { splitExpense, type ShareInput } from '../../../core/split';
 import { getNight, listExpenses, saveExpense, type NightMember } from '../../../db/repo';
 import { AmountPad } from '../../../ui/AmountPad';
@@ -13,6 +14,7 @@ import { Avatar } from '../../../ui/Avatar';
 import { Button } from '../../../ui/Button';
 import { CategoryChips } from '../../../ui/CategoryChips';
 import { ExtraModal } from '../../../ui/ExtraModal';
+import { ItemList, type ItemDraft } from '../../../ui/ItemList';
 import { guarded } from '../../../ui/oops';
 import { Pop, Tap } from '../../../ui/Tap';
 import { theme } from '../../../ui/theme';
@@ -21,6 +23,12 @@ type ShareState = { weight: number; extra: number | null };
 
 const allIn = (members: NightMember[]): Record<number, ShareState> =>
   Object.fromEntries(members.map(m => [m.id, { weight: 1, extra: null }]));
+
+// A row with no name, no price and no claims is a spare: skipped, not an error.
+const isBlank = (d: ItemDraft) => !d.name.trim() && !d.priceText.trim() && d.claims.length === 0;
+const hasPrice = (d: ItemDraft) => (parseMoney(d.priceText) ?? 0) > 0;
+const toItems = (drafts: ItemDraft[]): ItemInput[] =>
+  drafts.filter(d => !isBlank(d)).map(d => ({ name: d.name.trim(), price: parseMoney(d.priceText) ?? 0, claims: d.claims }));
 
 export default function ExpenseScreen() {
   const { id, expenseId } = useLocalSearchParams<{ id: string; expenseId?: string }>();
@@ -39,7 +47,14 @@ export default function ExpenseScreen() {
   const [createdAt, setCreatedAt] = useState<number | undefined>();
   const [extraFor, setExtraFor] = useState<NightMember | null>(null);
   const [saving, setSaving] = useState(false);
+  // null: one amount split by shares. A list: the payment broken into items people claim.
+  const [items, setItems] = useState<ItemDraft[] | null>(null);
+  const [serviceText, setServiceText] = useState('');
+  const [focusKey, setFocusKey] = useState<number | null>(null);
+  const nextKey = useRef(1);
   const busy = useRef(false);
+  const draft = (name = '', priceText = '', claims: ItemDraft['claims'] = []): ItemDraft =>
+    ({ key: nextKey.current++, name, priceText, claims });
 
   useEffect(() => {
     guarded("Couldn't load this", async () => {
@@ -55,6 +70,10 @@ export default function ExpenseScreen() {
         setNote(existing.note);
         setIsTreat(existing.isTreat);
         setCreatedAt(existing.createdAt);
+        if (existing.items.length) {
+          setItems([...existing.items.map(it => draft(it.name, minorToInput(it.price), it.claims)), draft()]);
+          setServiceText(existing.service ? minorToInput(existing.service) : '');
+        }
         if (existing.isTreat) {
           setShares(allIn(data.members));
         } else {
@@ -69,20 +88,78 @@ export default function ExpenseScreen() {
     });
   }, [db, nightId, editingId]);
 
-  const amount = parseMoney(amountText);
+  const itemList = items ? toItems(items) : [];
+  // A row still being typed (no price yet) is left out of the preview so the totals don't blank out; it only blocks Save.
+  const unpriced = items ? items.filter(d => !isBlank(d) && !hasPrice(d)) : [];
+  const pricedList = items ? toItems(items.filter(hasPrice)) : [];
+  const serviceParsed = serviceText.trim() ? parseMoney(serviceText) : 0;
+  const service = serviceParsed ?? -1; // unreadable service text fails the split with its own message
+  const memberIds = members.map(m => m.id);
+  const itemPreview = items && pricedList.length ? splitItems(pricedList, service, memberIds) : null;
+  const itemSave = items && payerId != null ? itemShares(itemList, service, memberIds, payerId, isTreat) : null;
+
+  const amount = items ? (itemPreview?.ok ? itemPreview.total : null) : parseMoney(amountText);
   const shareList: ShareInput[] = isTreat && payerId != null
     ? [{ personId: payerId, weight: 1 }]
     : members
         .map(m => ({ personId: m.id, weight: shares[m.id]?.weight ?? 0, extra: shares[m.id]?.extra ?? null }))
         .filter(s => s.weight > 0 || (s.extra ?? 0) > 0);
-  const preview = amount ? splitExpense(amount, shareList) : null;
+  const preview = items ? itemPreview : amount ? splitExpense(amount, shareList) : null;
   const extraSum = shareList.reduce((t, s) => t + (s.extra ?? 0), 0);
   const sharers = shareList.filter(s => s.weight > 0);
   // The "For…" shortcut is lit when exactly one person is in, at one plain share.
   const soloFor = !isTreat && shareList.length === 1 && shareList[0].weight === 1 && !shareList[0].extra
     ? shareList[0].personId
     : null;
-  const canSave = amount != null && amount > 0 && payerId != null && preview?.ok === true;
+  const canSave = items
+    ? itemSave?.ok === true && unpriced.length === 0
+    : amount != null && amount > 0 && payerId != null && preview?.ok === true;
+
+  // The amount becomes the first item. Anything only one person had becomes its own item, claimed by them.
+  function breakIntoItems() {
+    const typed = parseMoney(amountText) ?? 0;
+    const st = members.map(m => ({ id: m.id, ...(shares[m.id] ?? { weight: 0, extra: null }) }));
+    const extras = st.filter(s => (s.extra ?? 0) > 0);
+    const rest = typed - extras.reduce((t, s) => t + (s.extra ?? 0), 0);
+    const plainAll = st.every(s => s.weight === 1);
+    const claims = isTreat || plainAll ? [] : st.filter(s => s.weight > 0).map(s => ({ personId: s.id, count: s.weight }));
+    // Extras that cover the whole bill leave nothing for a first row.
+    const first = rest > 0 || extras.length === 0 ? [draft(note.trim(), rest > 0 ? minorToInput(rest) : '', claims)] : [];
+    const own = extras.map(s => draft(`${members.find(m => m.id === s.id)?.name ?? ''}'s extra`, minorToInput(s.extra!), [{ personId: s.id, count: 1 }]));
+    setItems([...first, ...own, draft()]);
+    setFocusKey(null); // no keyboard yet: let them see the list first
+  }
+
+  function addItem() {
+    if (!items) return;
+    const d = draft();
+    setItems([...items, d]);
+    setFocusKey(d.key);
+  }
+
+  // Removing a real item down to one real item makes it a plain split again: its price (plus any service)
+  // is the amount, its claims the shares. Spare blank rows don't count, and removing one never switches back.
+  function removeItem(key: number) {
+    if (!items) return;
+    const gone = items.find(d => d.key === key);
+    const left = items.filter(d => d.key !== key);
+    const real = left.filter(d => !isBlank(d));
+    if (!gone || isBlank(gone) || real.length !== 1) {
+      setItems(left.length ? left : [draft()]);
+      return;
+    }
+    const only = real[0];
+    const price = only ? parseMoney(only.priceText) ?? 0 : 0;
+    const total = price + Math.max(0, serviceParsed ?? 0);
+    setAmountText(total > 0 ? minorToInput(total) : '');
+    if (only?.name.trim() && !note.trim()) setNote(only.name.trim());
+    const claimed = only?.claims.filter(c => c.count > 0) ?? [];
+    setShares(claimed.length
+      ? Object.fromEntries(members.map(m => [m.id, { weight: Math.min(9, claimed.find(c => c.personId === m.id)?.count ?? 0), extra: null }]))
+      : allIn(members));
+    setItems(null);
+    setServiceText('');
+  }
 
   // One tap for the most common case: the payer bought something for one other person.
   function onlyFor(personId: number) {
@@ -107,7 +184,14 @@ export default function ExpenseScreen() {
     busy.current = true;
     setSaving(true);
     const ok = await guarded("Couldn't save that", async () => {
-      await saveExpense(db, { id: editingId, nightId, payerId, amount, category, note: note.trim(), isTreat, shares: shareList, createdAt });
+      if (items && itemSave?.ok) {
+        await saveExpense(db, {
+          id: editingId, nightId, payerId, amount: itemSave.amount, category, note: note.trim(), isTreat,
+          shares: itemSave.shares, createdAt, items: itemList, service: Math.max(0, service),
+        });
+      } else {
+        await saveExpense(db, { id: editingId, nightId, payerId, amount, category, note: note.trim(), isTreat, shares: shareList, createdAt });
+      }
       return true;
     });
     if (!ok) {
@@ -123,13 +207,36 @@ export default function ExpenseScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: editingId != null ? 'Change this one' : 'Someone paid' }} />
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 48 + insets.bottom }]} keyboardShouldPersistTaps="handled">
-        <Text style={styles.kicker}>How much?</Text>
-        <Pop trigger={amountText}>
-          <Text style={[styles.amount, !amountText && styles.placeholder]} numberOfLines={1} adjustsFontSizeToFit>
+        <Text style={styles.kicker}>{items ? 'Total' : 'How much?'}</Text>
+        <Pop trigger={items ? amount : amountText}>
+          <Text style={[styles.amount, !(items ? amount : amountText) && styles.placeholder]} numberOfLines={1} adjustsFontSizeToFit>
             {money(amount ?? 0)}
           </Text>
         </Pop>
-        <AmountPad value={amountText} onChange={setAmountText} />
+        {items ? (
+          <>
+            <ItemList items={items} members={members} onChange={setItems} onAdd={addItem} onRemove={removeItem} focusKey={focusKey} />
+            <View style={styles.serviceRow}>
+              <Text style={styles.serviceLabel}>Service / tax / tip</Text>
+              <TextInput
+                value={serviceText}
+                onChangeText={setServiceText}
+                placeholder="0.00"
+                placeholderTextColor={theme.color.inkDim}
+                keyboardType="decimal-pad"
+                style={styles.serviceInput}
+                maxLength={12}
+                accessibilityLabel="Service, tax or tip"
+              />
+            </View>
+            <Text style={styles.hint}>Spread by what each person had.</Text>
+          </>
+        ) : (
+          <>
+            <AmountPad value={amountText} onChange={setAmountText} />
+            <Button kind="ghost" label="Break it into items" onPress={breakIntoItems} />
+          </>
+        )}
 
         <Text style={styles.h2}>Who paid?</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payers}>
@@ -168,6 +275,20 @@ export default function ExpenseScreen() {
           <Text style={styles.treat}>
             {members.find(m => m.id === payerId)?.name ?? 'The payer'} covers this one. Nobody owes anything for it.
           </Text>
+        ) : items ? (
+          <>
+            <Text style={styles.h2}>Who owes what</Text>
+            {members.map(m => {
+              const owed = itemPreview?.ok ? itemPreview.owed.get(m.id) ?? 0 : null;
+              return (
+                <View key={m.id} style={styles.owesRow}>
+                  <Avatar person={m} size={36} dimmed={!owed} />
+                  <Text style={[styles.shareName, { color: owed ? m.color : theme.color.inkDim }]} numberOfLines={1}>{m.name}</Text>
+                  <Text style={[styles.owed, !owed && styles.placeholder]} numberOfLines={1}>{owed != null ? money(owed) : '—'}</Text>
+                </View>
+              );
+            })}
+          </>
         ) : (
           <>
             <Text style={styles.h2}>Just for one person?</Text>
@@ -240,6 +361,13 @@ export default function ExpenseScreen() {
         )}
 
         {preview && !preview.ok && <Text style={styles.error}>{preview.error}</Text>}
+        {items && unpriced.length > 0 && (
+          <Text style={styles.error}>{unpriced[0].name.trim() ? `${unpriced[0].name.trim()} needs a price` : 'An item needs a price'}</Text>
+        )}
+        {items && unpriced.length === 0 && itemList.length === 0 && <Text style={styles.hint}>Add an item to save.</Text>}
+        {items && unpriced.length === 0 && itemList.length > 0 && preview?.ok && itemSave && !itemSave.ok && (
+          <Text style={styles.error}>{itemSave.error}</Text>
+        )}
         <Button label={editingId != null ? 'Save changes' : 'Save'} onPress={save} disabled={!canSave || saving} style={styles.save} />
       </ScrollView>
 
@@ -302,4 +430,11 @@ const styles = StyleSheet.create({
   pct: { ...theme.type.small, color: theme.color.inkDim },
   error: { ...theme.type.bodyBold, color: theme.color.owes, textAlign: 'center' },
   save: { minHeight: 72, marginTop: 8 },
+  serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
+  serviceLabel: { flex: 1, ...theme.type.bodyBold, color: theme.color.ink },
+  serviceInput: {
+    width: 120, minHeight: theme.tap, ...theme.type.title, color: theme.color.ink, textAlign: 'right',
+    fontVariant: ['tabular-nums'], borderBottomWidth: 2, borderColor: theme.color.line, paddingHorizontal: 4,
+  },
+  owesRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
 });

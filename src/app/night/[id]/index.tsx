@@ -153,7 +153,9 @@ export default function NightScreen() {
                 <Text style={styles.expEmoji}>{categoryEmoji(e.category)}</Text>
                 <View style={styles.flex}>
                   <Text style={styles.expTitle} numberOfLines={1}>{title}</Text>
-                  <Text style={styles.dim}>{payer?.name} paid</Text>
+                  <Text style={styles.dim}>
+                    {payer?.name} paid{e.items.length ? ` · ${e.items.length} ${e.items.length === 1 ? 'item' : 'items'}` : ''}
+                  </Text>
                 </View>
                 {e.isTreat && (
                   <Circled>

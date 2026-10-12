@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { nightBalances, type Transfer } from '../core/balances';
 import type { Category } from '../core/categories';
 import { settle } from '../core/settle';
+import { itemShares, type ItemInput } from '../core/items';
 import { splitExpense, type ShareInput } from '../core/split';
 import type { StatExpense } from '../core/stats';
 
@@ -11,7 +12,8 @@ export interface Night {
   id: number; title: string; startedAt: number; endedAt: number | null;
   groupPhotoStart: string | null; groupPhoto: string | null; // group shots at the start and the end
 }
-export interface Expense extends StatExpense { id: number; nightId: number; note: string }
+// `items` is empty for a plain split. With items, `shares` holds each person's item total (see core/items).
+export interface Expense extends StatExpense { id: number; nightId: number; note: string; items: ItemInput[]; service: number }
 export interface Settlement extends Transfer { id: number; paidAt: number | null }
 export interface ExpenseInput {
   id?: number;
@@ -23,6 +25,8 @@ export interface ExpenseInput {
   isTreat: boolean;
   shares: ShareInput[];
   createdAt?: number;
+  items?: ItemInput[]; // when present, amount and shares are worked out from them on save
+  service?: number;
 }
 
 type PersonRow = { id: number; name: string; emoji: string; color: string; archived: number };
@@ -30,8 +34,10 @@ type NightRow = { id: number; title: string; started_at: number; ended_at: numbe
 type MemberRow = PersonRow & { photo_start: string | null; photo_end: string | null };
 type ExpenseRow = {
   id: number; night_id: number; payer_id: number; amount_minor: number;
-  category: string; note: string; is_treat: number; created_at: number;
+  category: string; note: string; is_treat: number; created_at: number; service_minor: number;
 };
+type ItemRow = { id: number; expense_id: number; name: string; price_minor: number };
+type ClaimRow = { item_id: number; person_id: number; count: number };
 type ShareRow = { expense_id: number; person_id: number; weight: number; extra_minor: number | null };
 type SettlementRow = { id: number; from_id: number; to_id: number; amount_minor: number; paid_at: number | null };
 
@@ -167,6 +173,26 @@ export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise
     list.push({ personId: s.person_id, weight: s.weight, extra: s.extra_minor });
     shares.set(s.expense_id, list);
   }
+  const itemRows = await db.getAllAsync<ItemRow>(
+    'SELECT i.id, i.expense_id, i.name, i.price_minor FROM expense_items i JOIN expenses e ON e.id = i.expense_id WHERE e.night_id = ? ORDER BY i.expense_id, i.position',
+    nightId,
+  );
+  const claimRows = await db.getAllAsync<ClaimRow>(
+    'SELECT c.item_id, c.person_id, c.count FROM item_claims c JOIN expense_items i ON i.id = c.item_id JOIN expenses e ON e.id = i.expense_id WHERE e.night_id = ? ORDER BY c.item_id, c.position',
+    nightId,
+  );
+  const claims = new Map<number, ItemInput['claims']>();
+  for (const c of claimRows) {
+    const list = claims.get(c.item_id) ?? [];
+    list.push({ personId: c.person_id, count: c.count });
+    claims.set(c.item_id, list);
+  }
+  const items = new Map<number, ItemInput[]>();
+  for (const i of itemRows) {
+    const list = items.get(i.expense_id) ?? [];
+    list.push({ name: i.name, price: i.price_minor, claims: claims.get(i.id) ?? [] });
+    items.set(i.expense_id, list);
+  }
   return rows.map(r => ({
     id: r.id,
     nightId: r.night_id,
@@ -177,6 +203,8 @@ export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise
     isTreat: r.is_treat === 1,
     createdAt: r.created_at,
     shares: shares.get(r.id) ?? [],
+    items: items.get(r.id) ?? [],
+    service: r.service_minor,
   }));
 }
 
@@ -186,7 +214,18 @@ async function assertOpen(db: SQLiteDatabase, nightId: number) {
   if (n.ended_at != null) throw new Error('This night is closed');
 }
 
-export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Promise<number> {
+export async function saveExpense(db: SQLiteDatabase, raw: ExpenseInput): Promise<number> {
+  const items = raw.items ?? [];
+  const service = items.length ? raw.service ?? 0 : 0;
+  let input = raw;
+  if (items.length) {
+    // Worked out here from the night's members, so what is stored always matches the items.
+    const data = await getNight(db, raw.nightId);
+    if (!data) throw new Error('That night no longer exists');
+    const derived = itemShares(items, service, data.members.map(m => m.id), raw.payerId, raw.isTreat);
+    if (!derived.ok) throw new Error(derived.error);
+    input = { ...raw, amount: derived.amount, shares: derived.shares };
+  }
   const check = splitExpense(input.amount, input.shares);
   if (!check.ok) throw new Error(check.error);
   if (input.id != null) {
@@ -201,14 +240,15 @@ export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Prom
   await db.withTransactionAsync(async () => {
     if (input.id != null) {
       await db.runAsync(
-        'UPDATE expenses SET payer_id = ?, amount_minor = ?, category = ?, note = ?, is_treat = ? WHERE id = ?',
-        input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, input.id,
+        'UPDATE expenses SET payer_id = ?, amount_minor = ?, category = ?, note = ?, is_treat = ?, service_minor = ? WHERE id = ?',
+        input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, service, input.id,
       );
       await db.runAsync('DELETE FROM expense_shares WHERE expense_id = ?', input.id);
+      await db.runAsync('DELETE FROM expense_items WHERE expense_id = ?', input.id);
     } else {
       const r = await db.runAsync(
-        'INSERT INTO expenses (night_id, payer_id, amount_minor, category, note, is_treat, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        input.nightId, input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(),
+        'INSERT INTO expenses (night_id, payer_id, amount_minor, category, note, is_treat, created_at, service_minor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        input.nightId, input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(), service,
       );
       id = r.lastInsertRowId;
     }
@@ -217,6 +257,18 @@ export async function saveExpense(db: SQLiteDatabase, input: ExpenseInput): Prom
         'INSERT INTO expense_shares (expense_id, person_id, weight, extra_minor, position) VALUES (?, ?, ?, ?, ?)',
         id, s.personId, s.weight, s.extra || null, position,
       );
+    }
+    for (const [position, it] of items.entries()) {
+      const r = await db.runAsync(
+        'INSERT INTO expense_items (expense_id, position, name, price_minor) VALUES (?, ?, ?, ?)',
+        id, position, it.name.trim(), it.price,
+      );
+      for (const [cpos, c] of it.claims.filter(c => c.count > 0).entries()) {
+        await db.runAsync(
+          'INSERT INTO item_claims (item_id, person_id, count, position) VALUES (?, ?, ?, ?)',
+          r.lastInsertRowId, c.personId, c.count, cpos,
+        );
+      }
     }
   });
   return id;

@@ -3,7 +3,7 @@ import type { Transfer } from '../core/balances';
 import { categoryEmoji, categoryLabel } from '../core/categories';
 import { formatMoney as money } from '../core/money';
 import type { Leader, NightStats } from '../core/stats';
-import { splitLabel } from '../core/summary';
+import { itemLines, splitLabel } from '../core/summary';
 import type { Expense, Night, NightMember } from '../db/repo';
 import { Strike } from './chalk';
 import { theme } from './theme';
@@ -74,6 +74,9 @@ export function ReceiptCard({ night, members, expenses, stats, open, paid }: Pro
               <Name id={e.payerId} />
               <Text style={styles.dim}> paid · {splitLabel(e, ids, name, money)}</Text>
             </Text>
+            {itemLines(e, name, money).map((l, i) => (
+              <Text key={i} style={styles.itemLine} numberOfLines={2}>{l}</Text>
+            ))}
           </View>
           <Text style={[styles.itemAmt, e.isTreat && styles.treat]} numberOfLines={1}>{money(e.amount)}</Text>
         </View>
@@ -115,6 +118,7 @@ const styles = StyleSheet.create({
   emoji: { ...theme.type.title, width: 30 },
   itemTitle: { ...theme.type.bodyBold, color: theme.color.ink },
   itemSub: { ...theme.type.smallBold },
+  itemLine: { ...theme.type.small, color: theme.color.inkDim, paddingLeft: 10, borderLeftWidth: 2, borderColor: theme.color.line },
   itemAmt: { ...theme.type.title, color: theme.color.ink, fontVariant: ['tabular-nums'] },
   treat: { color: theme.color.accent },
   totalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },

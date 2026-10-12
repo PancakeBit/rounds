@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatMoney as money } from './money';
-import { nightSummary, type SummaryInput } from './summary';
+import { itemLines, nightSummary, type SummaryInput } from './summary';
 
 const JO = 1, SAM = 2, KAI = 3, MIA = 4;
 const base: SummaryInput = {
@@ -76,5 +76,38 @@ describe('nightSummary', () => {
 
   it('handles an empty night', () => {
     expect(nightSummary(base)).toBe('Friday night · Fri 9 Oct\nTab: 0.00 · 0 things paid for\n\nWho pays who\nNobody owes anybody.');
+  });
+});
+
+describe('itemised payments', () => {
+  const items = [
+    { name: 'Beer', price: 1500, claims: [{ personId: JO, count: 2 }, { personId: SAM, count: 1 }] },
+    { name: 'Nachos', price: 950, claims: [] },
+    { name: '', price: 400, claims: [{ personId: KAI, count: 1 }] },
+  ];
+  it('itemLines names each item, who had it, and the service', () => {
+    expect(itemLines({ items, service: 300 }, id => base.names.get(id)!, money)).toEqual([
+      'Beer 15.00 · Jo ×2, Sam',
+      'Nachos 9.50 · everyone',
+      'Item 4.00 · Kai',
+      'Service / tax / tip 3.00',
+    ]);
+    expect(itemLines({ items: [], service: 0 }, id => base.names.get(id)!, money)).toEqual([]);
+  });
+  it('the text export lists the items under the payment', () => {
+    const text = nightSummary({
+      ...base,
+      expenses: [{
+        payerId: JO, amount: 3150, category: 'food', note: 'Dinner', isTreat: false, items, service: 300,
+        shares: [{ personId: JO, weight: 0, extra: 1000 }],
+      }],
+    });
+    expect(text.split('\n').slice(4, 9)).toEqual([
+      '🍔 Dinner 31.50 · Jo paid · by item',
+      '   Beer 15.00 · Jo ×2, Sam',
+      '   Nachos 9.50 · everyone',
+      '   Item 4.00 · Kai',
+      '   Service / tax / tip 3.00',
+    ]);
   });
 });
