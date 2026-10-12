@@ -6,7 +6,14 @@ export interface ItemClaim { personId: number; count: number }
 export interface ItemInput { name: string; price: number; claims: ItemClaim[] }
 
 export type ItemSplit =
-  | { ok: true; owed: Map<number, number>; subtotal: number; total: number }
+  | {
+      ok: true;
+      owed: Map<number, number>; // each person's total
+      perItem: Map<number, number>[]; // per item, in order: what each person owes for it
+      service: Map<number, number>; // each person's part of the service
+      subtotal: number;
+      total: number;
+    }
   | { ok: false; error: string };
 
 const fail = (error: string) => ({ ok: false as const, error });
@@ -17,6 +24,7 @@ export function splitItems(items: ItemInput[], service: number, everyone: number
   if (items.length === 0) return fail('Add an item');
   if (!Number.isSafeInteger(service) || service < 0) return fail('Service must be 0 or more');
   const owed = new Map<number, number>();
+  const perItem: Map<number, number>[] = [];
   let subtotal = 0;
   for (const it of items) {
     if (!Number.isSafeInteger(it.price) || it.price <= 0) return fail('Every item needs a price');
@@ -28,15 +36,18 @@ export function splitItems(items: ItemInput[], service: number, everyone: number
     const r = splitExpense(it.price, shares);
     if (!r.ok) return fail(r.error);
     for (const [p, v] of r.owed) owed.set(p, (owed.get(p) ?? 0) + v);
+    perItem.push(r.owed);
     subtotal += it.price;
   }
   if (!Number.isSafeInteger(subtotal * Math.max(service, 1))) return fail("That's too big to split");
+  let serviceParts = new Map<number, number>();
   if (service > 0) {
     const r = splitExpense(service, [...owed].map(([personId, v]) => ({ personId, weight: v })));
     if (!r.ok) return fail(r.error);
+    serviceParts = r.owed;
     for (const [p, v] of r.owed) owed.set(p, (owed.get(p) ?? 0) + v);
   }
-  return { ok: true, owed, subtotal, total: subtotal + service };
+  return { ok: true, owed, perItem, service: serviceParts, subtotal, total: subtotal + service };
 }
 
 // What gets stored: each person's item total as an exact amount with no plain share, so balances,

@@ -62,6 +62,24 @@ describe('splitItems', () => {
   });
 });
 
+describe('splitItems breakdown', () => {
+  it('says what each person owes for each item and for the service', () => {
+    // Beer 15.00: Jo x2, Sam x1. Nachos 9.00: nobody, so everyone. Service 3.00 by spend.
+    const r = splitItems([item(1500, [1, 2], [2, 1]), item(900)], 300, everyone);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.perItem.map(m => Object.fromEntries(m))).toEqual([{ 1: 1000, 2: 500 }, { 1: 300, 2: 300, 3: 300 }]);
+    expect(Object.fromEntries(r.service)).toEqual({ 1: 163, 2: 100, 3: 37 }); // 300 by 1300 : 800 : 300; the half cent goes to Jo
+    for (const [p, total] of r.owed) {
+      const parts = r.perItem.reduce((t, m) => t + (m.get(p) ?? 0), 0) + (r.service.get(p) ?? 0);
+      expect(parts).toBe(total);
+    }
+  });
+  it('no service: the service map is empty', () => {
+    const r = splitItems([item(100, [1, 1])], 0, everyone);
+    expect(r.ok && r.service.size).toBe(0);
+  });
+});
+
 describe('itemShares', () => {
   it('turns item totals into exact amounts with no plain share', () => {
     const r = itemShares([item(1200, [1, 1]), item(800, [2, 1])], 0, everyone, 1, false);

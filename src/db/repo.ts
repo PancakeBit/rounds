@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { nightBalances, type Transfer } from '../core/balances';
-import type { Category } from '../core/categories';
+import { joinCategories, parseCategories, type Category } from '../core/categories';
 import { settle } from '../core/settle';
 import { itemShares, type ItemInput } from '../core/items';
 import { splitExpense, type ShareInput } from '../core/split';
@@ -20,7 +20,7 @@ export interface ExpenseInput {
   nightId: number;
   payerId: number;
   amount: number;
-  category: Category;
+  categories: Category[];
   note: string;
   isTreat: boolean;
   shares: ShareInput[];
@@ -198,7 +198,7 @@ export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise
     nightId: r.night_id,
     payerId: r.payer_id,
     amount: r.amount_minor,
-    category: r.category as Category,
+    categories: parseCategories(r.category),
     note: r.note,
     isTreat: r.is_treat === 1,
     createdAt: r.created_at,
@@ -241,14 +241,14 @@ export async function saveExpense(db: SQLiteDatabase, raw: ExpenseInput): Promis
     if (input.id != null) {
       await db.runAsync(
         'UPDATE expenses SET payer_id = ?, amount_minor = ?, category = ?, note = ?, is_treat = ?, service_minor = ? WHERE id = ?',
-        input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, service, input.id,
+        input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, service, input.id,
       );
       await db.runAsync('DELETE FROM expense_shares WHERE expense_id = ?', input.id);
       await db.runAsync('DELETE FROM expense_items WHERE expense_id = ?', input.id);
     } else {
       const r = await db.runAsync(
         'INSERT INTO expenses (night_id, payer_id, amount_minor, category, note, is_treat, created_at, service_minor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        input.nightId, input.payerId, input.amount, input.category, input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(), service,
+        input.nightId, input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(), service,
       );
       id = r.lastInsertRowId;
     }

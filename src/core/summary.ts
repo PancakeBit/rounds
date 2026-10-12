@@ -1,12 +1,12 @@
 import type { Transfer } from './balances';
-import { categoryEmoji, categoryLabel, type Category } from './categories';
+import { categoriesEmoji, categoriesLabel, type Category } from './categories';
 import type { ShareInput } from './split';
-import type { ItemInput } from './items';
+import { splitItems, type ItemInput } from './items';
 
 export interface SummaryExpense {
   payerId: number;
   amount: number;
-  category: Category;
+  categories: Category[];
   note: string;
   isTreat: boolean;
   shares: ShareInput[];
@@ -47,17 +47,32 @@ export function splitLabel(
   return e.shares.map(one).join(', ');
 }
 
-// One line per item of an itemised payment: "Beer 15.00 · Jo ×2, Sam". Unclaimed reads "everyone".
+// One line per item of an itemised payment, with each person's part: "Beer 15.00 · Jo ×2 10.00, Sam 5.00".
+// Unclaimed reads "everyone 2.38 each". The service is spread by spend, so it gets a single line.
 export function itemLines(
   e: { items?: ItemInput[]; service?: number },
+  memberIds: number[],
   name: (id: number) => string,
   money: (minor: number) => string,
 ): string[] {
   const items = e.items ?? [];
   if (items.length === 0) return [];
-  const lines = items.map(it => {
+  const r = splitItems(items, 0, memberIds);
+  const lines = items.map((it, i) => {
+    const owed = r.ok ? r.perItem[i] : new Map<number, number>();
     const claimed = it.claims.filter(c => c.count > 0);
-    const who = claimed.length ? claimed.map(c => (c.count > 1 ? `${name(c.personId)} ×${c.count}` : name(c.personId))).join(', ') : 'everyone';
+    let who: string;
+    if (claimed.length === 0) {
+      const amounts = [...owed.values()];
+      const lo = Math.min(...amounts), hi = Math.max(...amounts);
+      who = amounts.length === 0 ? 'everyone' : `everyone ${lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`} each`;
+    } else {
+      who = claimed.map(c => {
+        const base = c.count > 1 ? `${name(c.personId)} ×${c.count}` : name(c.personId);
+        const amt = owed.get(c.personId);
+        return amt != null ? `${base} ${money(amt)}` : base;
+      }).join(', ');
+    }
     return `${it.name || 'Item'} ${money(it.price)} · ${who}`;
   });
   if (e.service) lines.push(`Service / tax / tip ${money(e.service)}`);
@@ -75,8 +90,8 @@ export function nightSummary(i: SummaryInput): string {
   if (n > 0) {
     lines.push('', 'What got paid');
     for (const e of i.expenses) {
-      lines.push(`${categoryEmoji(e.category)} ${e.note || categoryLabel(e.category)} ${i.money(e.amount)} · ${name(e.payerId)} paid · ${who(e)}`);
-      for (const l of itemLines(e, name, i.money)) lines.push(`   ${l}`);
+      lines.push(`${categoriesEmoji(e.categories)} ${e.note || categoriesLabel(e.categories)} ${i.money(e.amount)} · ${name(e.payerId)} paid · ${who(e)}`);
+      for (const l of itemLines(e, i.memberIds, name, i.money)) lines.push(`   ${l}`);
     }
   }
   lines.push('', 'Who pays who');

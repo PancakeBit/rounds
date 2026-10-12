@@ -6,9 +6,9 @@ const MIN = 60_000;
 const eq = (...ids: number[]) => ids.map(personId => ({ personId, weight: 1 }));
 
 const night: StatExpense[] = [
-  { payerId: JO, amount: 3000, shares: eq(JO, SAM, KAI), category: 'drinks', isTreat: false, createdAt: 0 },
-  { payerId: SAM, amount: 1200, shares: eq(SAM), category: 'food', isTreat: true, createdAt: 10 * MIN },
-  { payerId: JO, amount: 900, shares: eq(JO, KAI), category: 'taxi', isTreat: false, createdAt: 70 * MIN },
+  { payerId: JO, amount: 3000, shares: eq(JO, SAM, KAI), categories: ['drinks'], isTreat: false, createdAt: 0 },
+  { payerId: SAM, amount: 1200, shares: eq(SAM), categories: ['food'], isTreat: true, createdAt: 10 * MIN },
+  { payerId: JO, amount: 900, shares: eq(JO, KAI), categories: ['taxi'], isTreat: false, createdAt: 70 * MIN },
 ];
 
 describe('nightStats', () => {
@@ -41,5 +41,16 @@ describe('formatGap', () => {
     expect(formatGap(65 * MIN)).toBe('1h 5m');
     expect(formatGap(12 * MIN)).toBe('12m');
     expect(formatGap(20_000)).toBe('0m');
+  });
+});
+
+describe('payments for several things', () => {
+  it('count evenly towards each category, spare cents to the first', () => {
+    const s = nightStats([
+      { payerId: 1, amount: 1001, shares: eq(1, 2), categories: ['food', 'drinks'], isTreat: false, createdAt: 0 },
+      { payerId: 2, amount: 300, shares: eq(1, 2), categories: ['drinks'], isTreat: false, createdAt: 1 },
+    ]);
+    expect(s.byCategory).toEqual([{ category: 'drinks', amount: 800 }, { category: 'food', amount: 501 }]);
+    expect(s.total).toBe(1301);
   });
 });

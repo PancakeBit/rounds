@@ -29,15 +29,18 @@ Updated 2026-10-12 after the first device run. Changes from that feedback: plain
    - Every share at 0 with no extras → "Nobody is sharing the rest".
    - Tap **+ Extra**, then **No extra** → the extra is cleared.
    - Double-tap Save → only one item is created.
+   - **What for, several:** tap Drinks and Food → both light up. Tapping the only lit one does nothing (one must stay). Save → the feed shows 🍺🍔 and "Drinks & Food" when there's no note.
    - **By item.** Someone paid → Jo paid, type `20`, note `Dinner`, then tap **Break it into items**. The keypad goes. The first row reads `Dinner 20.00` and there's a blank row under it. The keyboard stays down. The kicker now says TOTAL.
      1. Fill the blank row: `Beer` `15`. Tap Jo twice (chip shows `×2` in Jo's colour), then Sam once. Add an item: `Steak` `24`, tap Kai. Leave Dinner unclaimed: its **Everyone** chip is lit and it says "Shared by everyone · tap names if only some had it".
-     2. Service / tax / tip `5.90`. TOTAL reads `64.90`. Who owes what shows Jo, Sam and Kai with amounts that add up to 64.90, and Kai's is the biggest.
+     1b. Every name chip is in that person's colour, even unclaimed; a claimed chip fills with the colour. Under Beer: `Jo 10.00 · Sam 5.00` with coloured names. Under Dinner (once it has a price): `Shared by everyone · 6.66–6.67 each`.
+     1c. **Scrolling:** with the list long enough to scroll, fill in a price, then tap **+ Add item**. The screen scrolls so the new row sits near the top, and the keyboard opens on its name. It must not jump to the top of the screen.
+     2. Service / tax / tip `5.90`. TOTAL reads `64.90`. Who owes what shows Jo, Sam and Kai with amounts that add up to 64.90, and Kai's is the biggest. Under each name is what it's made of, e.g. Jo: `Dinner (shared) 6.67 · Beer (×2) 10.00 · Service …`.
      3. Hold Sam's chip on Beer → Sam comes off. Tap Kai on Dinner → only Kai has it and Everyone goes dark. Tap **Everyone** → back to shared by everyone.
      4. Tap + Add item and leave it blank → Save still works (blank rows are skipped). Type `Chips` but no price → "Chips needs a price" in red and Save is greyed out, but the TOTAL and Who owes what keep showing the other items. Claim someone on a blank row without typing anything → "An item needs a price".
      5. Save. The feed row says `Jo paid · 3 items`. Tap it → the items, claims and service come back as you left them. Change Steak to `26` and save: the balances move.
      6. Hold it to remove, then Undo → it comes back with its items (open it and check).
      7. Open it again. Removing the blank row at the bottom does nothing special. Remove real items with × until one real item is left → it turns back into a plain split: the keypad returns with that item's price plus the service as the amount.
-     8. Recap → The receipt shows Dinner as `Jo paid · by item`, with each item and who had it underneath. Send as text has the items too, indented.
+     8. Recap → The receipt shows Dinner as `Jo paid · by item`, with each item and who had it underneath. Send as text has the items too, indented, with each person's amount (`Beer 15.00 · Jo ×2 10.00, Sam 5.00`).
      9. Extras first: type `20`, give Sam an extra of `20`, tap Break → one row `Sam's extra 20.00` claimed by Sam, plus a blank row. No error.
 9. Tap an item, change it to `36` and save: the balances update. Hold an item: chalk strike, it's removed, and "Removed · Undo" appears **above** the bottom panel. Tap Undo and it comes back.
 10. **Late arrival:** Add someone → Mia. Her column reads `0.00 square`, and new items include her.

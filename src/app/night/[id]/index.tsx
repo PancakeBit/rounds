@@ -5,7 +5,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { balanceHistory } from '../../../core/balances';
-import { categoryEmoji, categoryLabel } from '../../../core/categories';
+import { categoriesEmoji, categoriesLabel } from '../../../core/categories';
 import {
   deleteExpense, getNight, listExpenses, listSettlements, renameNight, saveExpense,
   type Expense, type ExpenseInput, type Night, type NightMember, type Settlement,
@@ -138,7 +138,7 @@ export default function NightScreen() {
         }
         renderItem={({ item: e, index }) => {
           const payer = byId.get(e.payerId);
-          const title = e.note || categoryLabel(e.category);
+          const title = e.note || categoriesLabel(e.categories);
           return (
             <Enter index={index}>
               <Tap
@@ -150,7 +150,7 @@ export default function NightScreen() {
                 accessibilityHint={ended ? undefined : 'Tap to change it. Hold to remove it.'}
                 style={styles.exp}
               >
-                <Text style={styles.expEmoji}>{categoryEmoji(e.category)}</Text>
+                <Text style={styles.expEmoji}>{categoriesEmoji(e.categories)}</Text>
                 <View style={styles.flex}>
                   <Text style={styles.expTitle} numberOfLines={1}>{title}</Text>
                   <Text style={styles.dim}>

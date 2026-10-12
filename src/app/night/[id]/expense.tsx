@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -40,7 +40,7 @@ export default function ExpenseScreen() {
   const [members, setMembers] = useState<NightMember[]>([]);
   const [amountText, setAmountText] = useState('');
   const [payerId, setPayerId] = useState<number | null>(null);
-  const [category, setCategory] = useState<Category>('drinks');
+  const [categories, setCategories] = useState<Category[]>(['drinks']);
   const [note, setNote] = useState('');
   const [isTreat, setIsTreat] = useState(false);
   const [shares, setShares] = useState<Record<number, ShareState>>({});
@@ -66,7 +66,7 @@ export default function ExpenseScreen() {
       if (existing) {
         setAmountText(minorToInput(existing.amount));
         setPayerId(existing.payerId);
-        setCategory(existing.category);
+        setCategories(existing.categories);
         setNote(existing.note);
         setIsTreat(existing.isTreat);
         setCreatedAt(existing.createdAt);
@@ -91,12 +91,22 @@ export default function ExpenseScreen() {
   const itemList = items ? toItems(items) : [];
   // A row still being typed (no price yet) is left out of the preview so the totals don't blank out; it only blocks Save.
   const unpriced = items ? items.filter(d => !isBlank(d) && !hasPrice(d)) : [];
-  const pricedList = items ? toItems(items.filter(hasPrice)) : [];
+  const pricedDrafts = items ? items.filter(hasPrice) : [];
+  const pricedList = toItems(pricedDrafts);
   const serviceParsed = serviceText.trim() ? parseMoney(serviceText) : 0;
   const service = serviceParsed ?? -1; // unreadable service text fails the split with its own message
   const memberIds = members.map(m => m.id);
   const itemPreview = items && pricedList.length ? splitItems(pricedList, service, memberIds) : null;
   const itemSave = items && payerId != null ? itemShares(itemList, service, memberIds, payerId, isTreat) : null;
+
+  // Per row: what each person owes for it, for the line under each item and the breakdown per person.
+  const parts = new Map<number, Map<number, number>>(
+    itemPreview?.ok ? pricedDrafts.map((d, i) => [d.key, itemPreview.perItem[i]]) : [],
+  );
+  const scroller = useRef<ScrollView>(null);
+  const listY = useRef(0);
+  const reveal = useCallback((y: number) => scroller.current?.scrollTo({ y: Math.max(0, listY.current + y - 16), animated: true }), []);
+  const focused = useCallback(() => setFocusKey(null), []);
 
   const amount = items ? (itemPreview?.ok ? itemPreview.total : null) : parseMoney(amountText);
   const shareList: ShareInput[] = isTreat && payerId != null
@@ -186,11 +196,11 @@ export default function ExpenseScreen() {
     const ok = await guarded("Couldn't save that", async () => {
       if (items && itemSave?.ok) {
         await saveExpense(db, {
-          id: editingId, nightId, payerId, amount: itemSave.amount, category, note: note.trim(), isTreat,
+          id: editingId, nightId, payerId, amount: itemSave.amount, categories, note: note.trim(), isTreat,
           shares: itemSave.shares, createdAt, items: itemList, service: Math.max(0, service),
         });
       } else {
-        await saveExpense(db, { id: editingId, nightId, payerId, amount, category, note: note.trim(), isTreat, shares: shareList, createdAt });
+        await saveExpense(db, { id: editingId, nightId, payerId, amount, categories, note: note.trim(), isTreat, shares: shareList, createdAt });
       }
       return true;
     });
@@ -206,7 +216,7 @@ export default function ExpenseScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: editingId != null ? 'Change this one' : 'Someone paid' }} />
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 48 + insets.bottom }]} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroller} contentContainerStyle={[styles.body, { paddingBottom: 48 + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <Text style={styles.kicker}>{items ? 'Total' : 'How much?'}</Text>
         <Pop trigger={items ? amount : amountText}>
           <Text style={[styles.amount, !(items ? amount : amountText) && styles.placeholder]} numberOfLines={1} adjustsFontSizeToFit>
@@ -215,7 +225,19 @@ export default function ExpenseScreen() {
         </Pop>
         {items ? (
           <>
-            <ItemList items={items} members={members} onChange={setItems} onAdd={addItem} onRemove={removeItem} focusKey={focusKey} />
+            <View onLayout={e => { listY.current = e.nativeEvent.layout.y; }}>
+              <ItemList
+                items={items}
+                members={members}
+                parts={parts}
+                onChange={setItems}
+                onAdd={addItem}
+                onRemove={removeItem}
+                focusKey={focusKey}
+                onFocused={focused}
+                onReveal={reveal}
+              />
+            </View>
             <View style={styles.serviceRow}>
               <Text style={styles.serviceLabel}>Service / tax / tip</Text>
               <TextInput
@@ -255,7 +277,8 @@ export default function ExpenseScreen() {
         </ScrollView>
 
         <Text style={styles.h2}>What for?</Text>
-        <CategoryChips value={category} onChange={setCategory} />
+        <Text style={styles.hint}>Pick as many as fit</Text>
+        <CategoryChips value={categories} onChange={setCategories} />
         <TextInput
           value={note}
           onChangeText={setNote}
@@ -280,11 +303,27 @@ export default function ExpenseScreen() {
             <Text style={styles.h2}>Who owes what</Text>
             {members.map(m => {
               const owed = itemPreview?.ok ? itemPreview.owed.get(m.id) ?? 0 : null;
+              // What their total is made of: their part of each item, then their part of the service.
+              const lines = itemPreview?.ok
+                ? [
+                    ...pricedDrafts.flatMap((d, i) => {
+                      const amt = itemPreview.perItem[i].get(m.id);
+                      if (!amt) return [];
+                      const c = d.claims.find(x => x.personId === m.id);
+                      const how = d.claims.length === 0 ? ' (shared)' : c && c.count > 1 ? ` (×${c.count})` : '';
+                      return [`${d.name.trim() || `Item ${i + 1}`}${how} ${money(amt)}`];
+                    }),
+                    ...(itemPreview.service.get(m.id) ? [`Service ${money(itemPreview.service.get(m.id)!)}`] : []),
+                  ]
+                : [];
               return (
-                <View key={m.id} style={styles.owesRow}>
-                  <Avatar person={m} size={36} dimmed={!owed} />
-                  <Text style={[styles.shareName, { color: owed ? m.color : theme.color.inkDim }]} numberOfLines={1}>{m.name}</Text>
-                  <Text style={[styles.owed, !owed && styles.placeholder]} numberOfLines={1}>{owed != null ? money(owed) : '—'}</Text>
+                <View key={m.id} style={styles.owesBlock}>
+                  <View style={styles.owesRow}>
+                    <Avatar person={m} size={36} dimmed={!owed} />
+                    <Text style={[styles.shareName, { color: owed ? m.color : theme.color.inkDim }]} numberOfLines={1}>{m.name}</Text>
+                    <Text style={[styles.owed, !owed && styles.placeholder]} numberOfLines={1}>{owed != null ? money(owed) : '—'}</Text>
+                  </View>
+                  {lines.length > 0 && <Text style={styles.breakdown}>{lines.join('  ·  ')}</Text>}
                 </View>
               );
             })}
@@ -436,5 +475,7 @@ const styles = StyleSheet.create({
     width: 120, minHeight: theme.tap, ...theme.type.title, color: theme.color.ink, textAlign: 'right',
     fontVariant: ['tabular-nums'], borderBottomWidth: 2, borderColor: theme.color.line, paddingHorizontal: 4,
   },
+  owesBlock: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderColor: theme.color.line },
   owesRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  breakdown: { ...theme.type.small, color: theme.color.inkDim, paddingLeft: 46 },
 });

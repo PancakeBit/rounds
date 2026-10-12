@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { Transfer } from '../core/balances';
-import { categoryEmoji, categoryLabel } from '../core/categories';
+import { categoriesEmoji, categoriesLabel } from '../core/categories';
 import { formatMoney as money } from '../core/money';
 import type { Leader, NightStats } from '../core/stats';
 import { itemLines, splitLabel } from '../core/summary';
@@ -67,14 +67,14 @@ export function ReceiptCard({ night, members, expenses, stats, open, paid }: Pro
       {expenses.length === 0 && <Text style={styles.dim}>Nothing got paid for.</Text>}
       {expenses.map(e => (
         <View key={e.id} style={styles.item}>
-          <Text style={styles.emoji}>{categoryEmoji(e.category)}</Text>
+          <Text style={styles.emoji}>{categoriesEmoji(e.categories)}</Text>
           <View style={styles.flex}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{e.note || categoryLabel(e.category)}</Text>
+            <Text style={styles.itemTitle} numberOfLines={1}>{e.note || categoriesLabel(e.categories)}</Text>
             <Text style={styles.itemSub} numberOfLines={2}>
               <Name id={e.payerId} />
               <Text style={styles.dim}> paid · {splitLabel(e, ids, name, money)}</Text>
             </Text>
-            {itemLines(e, name, money).map((l, i) => (
+            {itemLines(e, ids, name, money).map((l, i) => (
               <Text key={i} style={styles.itemLine} numberOfLines={2}>{l}</Text>
             ))}
           </View>

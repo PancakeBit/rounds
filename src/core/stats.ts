@@ -3,7 +3,7 @@ import type { Category } from './categories';
 import { splitExpense } from './split';
 
 export interface StatExpense extends ExpenseLike {
-  category: Category;
+  categories: Category[];
   isTreat: boolean;
   createdAt: number;
 }
@@ -45,7 +45,9 @@ export function nightStats(expenses: StatExpense[]): NightStats {
   for (const e of expenses) {
     total += e.amount;
     bump(paid, e.payerId, e.amount);
-    bump(cats, e.category, e.amount);
+    // A payment for several things counts evenly towards each; spare cents go to the first.
+    const n = e.categories.length || 1;
+    e.categories.forEach((c, i) => bump(cats, c, Math.floor(e.amount / n) + (i < e.amount % n ? 1 : 0)));
     if (e.isTreat) bump(treats, e.payerId, e.amount);
     const r = splitExpense(e.amount, e.shares);
     if (r.ok) for (const [id, owed] of r.owed) if (id !== e.payerId) bump(sponged, id, owed);

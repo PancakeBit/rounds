@@ -3,20 +3,29 @@ import { Tap } from './Tap';
 import { CATEGORIES, type Category } from '../core/categories';
 import { theme } from './theme';
 
-export function CategoryChips({ value, onChange }: { value: Category; onChange: (c: Category) => void }) {
+// Pick one or more: a bill can be drinks and food. The last one picked can't be turned off.
+export function CategoryChips({ value, onChange }: { value: Category[]; onChange: (c: Category[]) => void }) {
+  const toggle = (c: Category) => {
+    if (!value.includes(c)) onChange([...value, c]);
+    else if (value.length > 1) onChange(value.filter(x => x !== c));
+  };
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-      {CATEGORIES.map(c => (
-        <Tap
-          key={c.key}
-          accessibilityRole="button"
-          accessibilityState={{ selected: value === c.key }}
-          onPress={() => onChange(c.key)}
-          style={[styles.chip, value === c.key && styles.on]}
-        >
-          <Text style={[styles.text, value === c.key && styles.onText]}>{c.emoji} {c.label}</Text>
-        </Tap>
-      ))}
+      {CATEGORIES.map(c => {
+        const on = value.includes(c.key);
+        return (
+          <Tap
+            key={c.key}
+            accessibilityRole="checkbox"
+            accessibilityLabel={c.label}
+            accessibilityState={{ checked: on }}
+            onPress={() => toggle(c.key)}
+            style={[styles.chip, on && styles.on]}
+          >
+            <Text style={[styles.text, on && styles.onText]}>{c.emoji} {c.label}</Text>
+          </Tap>
+        );
+      })}
     </ScrollView>
   );
 }
