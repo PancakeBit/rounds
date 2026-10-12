@@ -38,6 +38,7 @@ export default function Recap() {
   const [paid, setPaid] = useState<Settlement[]>([]);
   const [tab, setTab] = useState<Tab>('receipt');
   const [layout, setLayout] = useState<LayoutId | null>(null);
+  const [breakdown, setBreakdown] = useState(false); // "Who had what" on the receipt and in the text; off by default
   const busy = useRef(false);
 
   // On focus, so photos taken on the line-up screen show up when coming back.
@@ -91,6 +92,7 @@ export default function Recap() {
         paid,
         open: openTransfers(),
         money,
+        breakdown,
       });
       await Share.share({ message });
     } catch (e) {
@@ -121,8 +123,21 @@ export default function Recap() {
 
       {tab === 'receipt' ? (
         <>
+          <Tap
+            onPress={() => setBreakdown(b => !b)}
+            accessibilityRole="switch"
+            accessibilityLabel="Show who had what"
+            accessibilityState={{ checked: breakdown }}
+            style={styles.toggle}
+          >
+            <View style={[styles.box, breakdown && styles.boxOn]}>{breakdown && <Text style={styles.tick}>✓</Text>}</View>
+            <View style={styles.flex}>
+              <Text style={styles.toggleText}>Show who had what</Text>
+              <Text style={styles.dim}>Each person's total and what it's made of</Text>
+            </View>
+          </Tap>
           <View ref={receiptRef} collapsable={false} style={styles.capture}>
-            <ReceiptCard night={night} members={members} expenses={expenses} stats={nightStats(expenses)} open={openTransfers()} paid={paid} />
+            <ReceiptCard night={night} members={members} expenses={expenses} stats={nightStats(expenses)} open={openTransfers()} paid={paid} breakdown={breakdown} />
           </View>
           <Button label="Send the receipt" onPress={() => shareImage(receiptRef, 'receipt')} style={styles.share} />
           <Button kind="ghost" label="Send as text" onPress={shareText} />
@@ -160,6 +175,15 @@ const styles = StyleSheet.create({
   tabText: { ...theme.type.title, color: theme.color.ink, textTransform: 'uppercase' },
   tabTextOn: { color: theme.color.bg },
   capture: { backgroundColor: theme.color.bg },
+  flex: { flex: 1 },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: theme.tap },
+  box: {
+    width: 32, height: 32, borderRadius: theme.radius.sm, borderWidth: 2, borderColor: theme.color.line,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  boxOn: { backgroundColor: theme.color.accent, borderColor: theme.color.accent },
+  tick: { ...theme.type.bodyBold, color: theme.color.bg },
+  toggleText: { ...theme.type.bodyBold, color: theme.color.ink },
   share: { minHeight: 64 },
   empty: { gap: 14, paddingVertical: 32 },
   emptyBig: { ...theme.type.display, color: theme.color.ink },

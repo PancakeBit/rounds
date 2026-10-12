@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { Transfer } from '../core/balances';
+import { whoHadWhat } from '../core/breakdown';
 import { categoriesEmoji, categoriesLabel } from '../core/categories';
 import { formatMoney as money } from '../core/money';
 import type { Leader, NightStats } from '../core/stats';
@@ -15,13 +16,14 @@ interface Props {
   stats: NightStats;
   open: Transfer[];
   paid: Transfer[];
+  breakdown?: boolean; // the optional "Who had what" section
 }
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 // The receipt half of the recap: everything that got paid, the total, and who owes who.
 // Drawn as a chalk tally on the slate; each person's name is in their own colour.
-export function ReceiptCard({ night, members, expenses, stats, open, paid }: Props) {
+export function ReceiptCard({ night, members, expenses, stats, open, paid, breakdown }: Props) {
   const people = new Map(members.map(m => [m.id, m]));
   const name = (id: number) => people.get(id)?.name ?? '?';
   const Name = ({ id }: { id: number }) => (
@@ -87,6 +89,22 @@ export function ReceiptCard({ night, members, expenses, stats, open, paid }: Pro
         <Text style={styles.total} numberOfLines={1} adjustsFontSizeToFit>{money(stats.total)}</Text>
       </View>
 
+      {breakdown && expenses.length > 0 && (
+        <>
+          <View style={styles.rule} />
+          <Text style={styles.section}>Who had what</Text>
+          {[...whoHadWhat(expenses, ids)].map(([pid, b]) => (
+            <View key={pid} style={styles.had}>
+              <View style={styles.hadTop}>
+                <Text style={[styles.hadName, { color: people.get(pid)?.color ?? theme.color.ink }]} numberOfLines={1}>{name(pid)}</Text>
+                <Text style={styles.hadTotal} numberOfLines={1}>{money(b.total)}</Text>
+              </View>
+              <Text style={styles.hadLines}>{b.lines.map(l => `${l.label} ${money(l.amount)}`).join('  ·  ')}</Text>
+            </View>
+          ))}
+        </>
+      )}
+
       <View style={styles.rule} />
       <Text style={styles.section}>Who owes who</Text>
       {open.length === 0 && paid.length === 0 && <Text style={styles.dim}>Nobody owes anybody.</Text>}
@@ -129,6 +147,11 @@ const styles = StyleSheet.create({
   owesWho: { ...theme.type.title },
   owesAmt: { ...theme.type.title, color: theme.color.ink, fontVariant: ['tabular-nums'] },
   paidTag: { ...theme.type.smallBold, color: theme.color.accent },
+  had: { gap: 2 },
+  hadTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
+  hadName: { ...theme.type.title, flexShrink: 1 },
+  hadTotal: { ...theme.type.title, color: theme.color.ink, fontVariant: ['tabular-nums'] },
+  hadLines: { ...theme.type.small, color: theme.color.inkDim },
   award: { ...theme.type.bodyBold },
   footer: { ...theme.type.label, color: theme.color.inkDim, textAlign: 'center', marginTop: 8 },
 });

@@ -50,6 +50,16 @@ export function splitItems(items: ItemInput[], service: number, everyone: number
   return { ok: true, owed, perItem, service: serviceParts, subtotal, total: subtotal + service };
 }
 
+// True when splitting the items again gives what was stored. It stops doing so if someone joined the
+// night after the payment and an item was unclaimed: "everyone" now includes them, but they were never charged.
+export function itemsStillMatch(r: ItemSplit, stored: ShareInput[]): boolean {
+  if (!r.ok) return false;
+  if (stored.some(x => x.weight !== 0)) return false;
+  const s = new Map(stored.map(x => [x.personId, x.extra ?? 0]));
+  const owed = [...r.owed].filter(([, v]) => v > 0);
+  return owed.length === s.size && owed.every(([p, v]) => s.get(p) === v);
+}
+
 // What gets stored: each person's item total as an exact amount with no plain share, so balances,
 // Settle up and the recap read an itemised payment like any other. "On me" still means the payer covers it all.
 export function itemShares(

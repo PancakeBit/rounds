@@ -1,7 +1,8 @@
 import type { Transfer } from './balances';
+import { whoHadWhat } from './breakdown';
 import { categoriesEmoji, categoriesLabel, type Category } from './categories';
 import type { ShareInput } from './split';
-import { splitItems, type ItemInput } from './items';
+import { itemsStillMatch, splitItems, type ItemInput } from './items';
 
 export interface SummaryExpense {
   payerId: number;
@@ -23,6 +24,7 @@ export interface SummaryInput {
   paid: Transfer[];
   open: Transfer[];
   money: (minor: number) => string;
+  breakdown?: boolean; // add "Who had what"
 }
 
 // How one payment was split, in words: "everyone", "for Sam", "on me", "by item", "Jo ×2 +5.00, Sam".
@@ -50,7 +52,7 @@ export function splitLabel(
 // One line per item of an itemised payment, with each person's part: "Beer 15.00 · Jo ×2 10.00, Sam 5.00".
 // Unclaimed reads "everyone 2.38 each". The service is spread by spend, so it gets a single line.
 export function itemLines(
-  e: { items?: ItemInput[]; service?: number },
+  e: { items?: ItemInput[]; service?: number; shares?: ShareInput[]; isTreat?: boolean },
   memberIds: number[],
   name: (id: number) => string,
   money: (minor: number) => string,
@@ -58,8 +60,11 @@ export function itemLines(
   const items = e.items ?? [];
   if (items.length === 0) return [];
   const r = splitItems(items, 0, memberIds);
+  // Amounts only while they still agree with what was charged (see itemsStillMatch); names otherwise.
+  const full = e.shares && !e.isTreat ? splitItems(items, e.service ?? 0, memberIds) : null;
+  const trusted = r.ok && (!full || itemsStillMatch(full, e.shares!));
   const lines = items.map((it, i) => {
-    const owed = r.ok ? r.perItem[i] : new Map<number, number>();
+    const owed = r.ok && trusted ? r.perItem[i] : new Map<number, number>();
     const claimed = it.claims.filter(c => c.count > 0);
     let who: string;
     if (claimed.length === 0) {
@@ -92,6 +97,12 @@ export function nightSummary(i: SummaryInput): string {
     for (const e of i.expenses) {
       lines.push(`${categoriesEmoji(e.categories)} ${e.note || categoriesLabel(e.categories)} ${i.money(e.amount)} · ${name(e.payerId)} paid · ${who(e)}`);
       for (const l of itemLines(e, i.memberIds, name, i.money)) lines.push(`   ${l}`);
+    }
+  }
+  if (i.breakdown && n > 0) {
+    lines.push('', 'Who had what');
+    for (const [p, b] of whoHadWhat(i.expenses, i.memberIds)) {
+      lines.push(`${name(p)} ${i.money(b.total)}: ${b.lines.map(l => `${l.label} ${i.money(l.amount)}`).join(', ')}`);
     }
   }
   lines.push('', 'Who pays who');

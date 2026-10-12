@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { formatMoney as money } from './money';
+import { itemShares } from './items';
 import { itemLines, nightSummary, type SummaryInput } from './summary';
+
+const stored = (r: ReturnType<typeof itemShares>) => {
+  if (!r.ok) throw new Error(r.error);
+  return r.shares;
+};
 
 const JO = 1, SAM = 2, KAI = 3, MIA = 4;
 const base: SummaryInput = {
@@ -79,6 +85,19 @@ describe('nightSummary', () => {
   });
 });
 
+describe('who had what', () => {
+  const expenses = [
+    { payerId: JO, amount: 900, categories: ['drinks' as const], note: 'Round', isTreat: false, shares: [JO, SAM, KAI].map(personId => ({ personId, weight: 1 })) },
+  ];
+  it('is left out unless asked for', () => {
+    expect(nightSummary({ ...base, expenses })).not.toContain('Who had what');
+  });
+  it('lists each person with their total and what it is made of', () => {
+    const text = nightSummary({ ...base, expenses, breakdown: true });
+    expect(text).toContain(['Who had what', 'Jo 3.00: Round 3.00', 'Sam 3.00: Round 3.00', 'Kai 3.00: Round 3.00', '', 'Who pays who'].join('\n'));
+  });
+});
+
 describe('itemised payments', () => {
   const items = [
     { name: 'Beer', price: 1500, claims: [{ personId: JO, count: 2 }, { personId: SAM, count: 1 }] },
@@ -95,6 +114,9 @@ describe('itemised payments', () => {
     // Unequal cents across everyone show as a range.
     expect(itemLines({ items: [{ name: 'Chips', price: 1000, claims: [] }], service: 0 }, [JO, SAM, KAI], id => base.names.get(id)!, money))
       .toEqual(['Chips 10.00 · everyone 3.33–3.34 each']);
+    // Someone joined after it was saved: the stored amounts no longer match, so names only.
+    expect(itemLines({ items: [{ name: 'Chips', price: 1000, claims: [] }], service: 0, shares: [{ personId: JO, weight: 0, extra: 500 }, { personId: SAM, weight: 0, extra: 500 }] }, [JO, SAM, KAI], id => base.names.get(id)!, money))
+      .toEqual(['Chips 10.00 · everyone']);
     expect(itemLines({ items: [], service: 0 }, base.memberIds, id => base.names.get(id)!, money)).toEqual([]);
   });
   it('the text export lists the items under the payment', () => {
@@ -102,7 +124,7 @@ describe('itemised payments', () => {
       ...base,
       expenses: [{
         payerId: JO, amount: 3150, categories: ['food'], note: 'Dinner', isTreat: false, items, service: 300,
-        shares: [{ personId: JO, weight: 0, extra: 1000 }],
+        shares: stored(itemShares(items, 300, base.memberIds, JO, false)),
       }],
     });
     expect(text.split('\n').slice(4, 9)).toEqual([
