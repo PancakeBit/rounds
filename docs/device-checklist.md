@@ -79,6 +79,14 @@ Updated 2026-10-12 after the first device run. Changes from that feedback: plain
 - **Delete a night:** at the bottom of a night's list, **Delete this night** → "Delete …? Every payment, settle-up tick and photo from this night goes." → Keep it does nothing; Delete takes you Home and the night is gone. A payment that was moved out of it earlier keeps its receipt photo.
 
 
+## Home: people first (v1.3)
+
+- **Group name:** Home shows **The Group ✎**. Tap → "Name the group" → `The Usuals` → Save. It sticks after closing and reopening the app. Clearing the box greys out Save.
+- **Tonight strip:** with a night open, the top strip shows it ("Tonight" if it started today, else "Open · Fri 9 Oct") and its tab. Tap → that night. Other open nights are listed under **Also open**.
+- **Person cards:** each person has a big face, their name in their colour, and a small line: `gets back 21.50` (green figure), `owes 18.50` (red figure) or `all square`. The figures are across every open night: check them against each night's Settle up (a person's card = what they get minus what they pay over all those nights). Six or more people wrap into more rows; long names cut off with "…". The dashed **+ Add someone** card opens The crew.
+- **Profile photo:** The crew → Details on someone → **Add a profile photo** → crop to a square → Save. Their face shows the photo on Home, the night screen, Settle up and the payment screen; the colour ring stays. **Use the emoji** + Save puts the emoji back. Night snapshots still win on that night's screens.
+- **Person page:** tap a card. Big face, name, total. **Who**: each person they pay or get paid by, netted across nights, with the per-night pieces underneath when there's more than one night. **What for**: one card per open night with what they had (each line says who paid for it), what they paid for, the totals, and what's left that night; tap the card → that night. **Pay …**: their ways to pay with Copy and QR, or "+ Add how to pay …". **Edit** (top right) → their edit page.
+
 ## Phone settings
 
 18. **Navigation bar:** with 3-button navigation and again with gestures, nothing sits under the bar. That covers the bottom panel, the Undo bar, the camera shutter, and the last button on each scrolling screen.

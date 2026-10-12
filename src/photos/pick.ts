@@ -3,13 +3,13 @@ import * as ImagePicker from 'expo-image-picker';
 
 // Asks camera or gallery, then returns the chosen picture's URI, or null if they backed out.
 // The URI is a temporary copy; keep it with keepPicture.
-export function pickPicture(title: string): Promise<string | null> {
+export function pickPicture(title: string, opts: { square?: boolean } = {}): Promise<string | null> {
   return new Promise(resolve => {
     // A button press can be followed by a dismiss; the first answer given is the one that counts.
     let chosen = false;
     const go = (source: 'camera' | 'library') => {
       chosen = true;
-      from(source).then(resolve, () => resolve(null));
+      from(source, !!opts.square).then(resolve, () => resolve(null));
     };
     Alert.alert(title, undefined, [
       { text: 'Take a photo', onPress: () => go('camera') },
@@ -19,7 +19,7 @@ export function pickPicture(title: string): Promise<string | null> {
   });
 }
 
-async function from(source: 'camera' | 'library'): Promise<string | null> {
+async function from(source: 'camera' | 'library', square: boolean): Promise<string | null> {
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
@@ -27,7 +27,8 @@ async function from(source: 'camera' | 'library'): Promise<string | null> {
       return null;
     }
   }
-  const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.9 };
+  // Square pictures (profile photos) get the system's crop step.
+  const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.9, ...(square ? { allowsEditing: true, aspect: [1, 1] as [number, number] } : {}) };
   const r = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   return r.canceled ? null : r.assets[0]?.uri ?? null;
 }

@@ -13,8 +13,8 @@ const plain = (amount: number, note: string, shares: ShareInput[] = eq(JO, SAM, 
 describe('whoHadWhat', () => {
   it('plain payments: each person gets their share, labelled by the note', () => {
     const r = whoHadWhat([plain(900, 'Round 1'), plain(600, 'Taxi', eq(JO, SAM))], ids);
-    expect(r.get(JO)).toEqual({ total: 600, lines: [{ label: 'Round 1', amount: 300 }, { label: 'Taxi', amount: 300 }] });
-    expect(r.get(KAI)).toEqual({ total: 300, lines: [{ label: 'Round 1', amount: 300 }] });
+    expect(r.get(JO)).toEqual({ total: 600, lines: [{ label: 'Round 1', amount: 300, payerId: JO }, { label: 'Taxi', amount: 300, payerId: JO }] });
+    expect(r.get(KAI)).toEqual({ total: 300, lines: [{ label: 'Round 1', amount: 300, payerId: JO }] });
   });
   it('no note: the category names it', () => {
     const r = whoHadWhat([{ ...plain(300, ''), categories: ['drinks', 'food'] }], ids);
@@ -31,9 +31,9 @@ describe('whoHadWhat', () => {
     const r = whoHadWhat([e], ids);
     expect(r.get(JO)).toEqual({
       total: 1300 + 163,
-      lines: [{ label: 'Beer ×2', amount: 1000 }, { label: 'Nachos', amount: 300 }, { label: 'Dinner service', amount: 163 }],
+      lines: [{ label: 'Beer ×2', amount: 1000, payerId: JO }, { label: 'Nachos', amount: 300, payerId: JO }, { label: 'Dinner service', amount: 163, payerId: JO }],
     });
-    expect(r.get(KAI)?.lines).toEqual([{ label: 'Nachos', amount: 300 }, { label: 'Dinner service', amount: 37 }]);
+    expect(r.get(KAI)?.lines).toEqual([{ label: 'Nachos', amount: 300, payerId: JO }, { label: 'Dinner service', amount: 37, payerId: JO }]);
   });
   it('someone who joined after an itemised payment is not handed part of it', () => {
     // Saved when only Jo and Sam were there: the unclaimed Nachos went 450 / 450.
@@ -43,12 +43,12 @@ describe('whoHadWhat', () => {
       service: 0,
     };
     const r = whoHadWhat([e], ids); // Kai is in the member list now
-    expect(r.get(JO)).toEqual({ total: 450, lines: [{ label: 'Dinner', amount: 450 }] });
+    expect(r.get(JO)).toEqual({ total: 450, lines: [{ label: 'Dinner', amount: 450, payerId: JO }] });
     expect(r.has(KAI)).toBe(false);
   });
   it('a treat is down to whoever paid, marked on me', () => {
     const r = whoHadWhat([{ ...plain(1600, 'Milkshakes', [{ personId: SAM, weight: 1 }], SAM), isTreat: true }], ids);
-    expect(r.get(SAM)).toEqual({ total: 1600, lines: [{ label: 'Milkshakes (on me)', amount: 1600 }] });
+    expect(r.get(SAM)).toEqual({ total: 1600, lines: [{ label: 'Milkshakes (on me)', amount: 1600, payerId: SAM }] });
     expect(r.has(JO)).toBe(false);
   });
   it('people come out in the order given, and only if they had something', () => {

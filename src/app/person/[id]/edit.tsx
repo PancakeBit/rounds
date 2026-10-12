@@ -4,15 +4,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
-import { listCrew, listPayMethods, savePayMethods, setArchived, updatePerson, type PayMethod, type Person } from '../../db/repo';
-import { pickPicture } from '../../photos/pick';
-import { dropFile, keepPicture } from '../../photos/store';
-import { Avatar } from '../../ui/Avatar';
-import { Button } from '../../ui/Button';
-import { ImageViewer } from '../../ui/ImageViewer';
-import { guarded } from '../../ui/oops';
-import { Enter, Tap } from '../../ui/Tap';
-import { CREW_COLORS, CREW_EMOJI, theme } from '../../ui/theme';
+import { listCrew, listPayMethods, savePayMethods, setArchived, setPersonPhoto, updatePerson, type PayMethod, type Person } from '../../../db/repo';
+import { pickPicture } from '../../../photos/pick';
+import { dropFile, keepPicture } from '../../../photos/store';
+import { Avatar } from '../../../ui/Avatar';
+import { Button } from '../../../ui/Button';
+import { ImageViewer } from '../../../ui/ImageViewer';
+import { guarded } from '../../../ui/oops';
+import { Enter, Tap } from '../../../ui/Tap';
+import { CREW_COLORS, CREW_EMOJI, theme } from '../../../ui/theme';
 
 type Draft = PayMethod & { key: number };
 
@@ -25,6 +25,7 @@ export default function PersonScreen() {
   const [person, setPerson] = useState<Person | null>(null);
   const [name, setName] = useState('');
   const [look, setLook] = useState({ emoji: '', color: '' });
+  const [photo, setPhoto] = useState<string | null>(null); // profile picture; replaces the emoji everywhere
   const [methods, setMethods] = useState<Draft[]>([]);
   const [viewing, setViewing] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export default function PersonScreen() {
       setPerson(p);
       setName(p.name);
       setLook({ emoji: p.emoji, color: p.color });
+      setPhoto(p.photoUri);
       const pm = (await listPayMethods(db, [personId])).get(personId) ?? [];
       setMethods(pm.length ? pm.map(draft) : [draft({ label: '', number: '', qrUri: null })]);
     });
@@ -64,6 +66,15 @@ export default function PersonScreen() {
     edit(m.key, { qrUri: kept });
   }
 
+  async function pickPhoto() {
+    const uri = await pickPicture('Profile picture', { square: true });
+    if (!uri) return;
+    const kept = await guarded("Couldn't keep that picture", () => keepPicture({ kind: 'profile', personId }, uri));
+    if (!kept) return;
+    fresh.current.add(kept);
+    setPhoto(kept);
+  }
+
   async function save() {
     if (busy.current || !person) return;
     busy.current = true;
@@ -72,6 +83,7 @@ export default function PersonScreen() {
       await updatePerson(db, personId, { name, emoji: look.emoji, color: look.color });
       const unused = await savePayMethods(db, personId, methods);
       for (const u of unused) dropFile(u);
+      dropFile(await setPersonPhoto(db, personId, photo));
       return true;
     });
     setSaving(false);
@@ -80,7 +92,7 @@ export default function PersonScreen() {
       return;
     }
     // Saved pictures are no longer "fresh"; whatever was picked then dropped from the list still is.
-    const kept = new Set(methods.map(m => m.qrUri));
+    const kept = new Set<string | null>([...methods.map(m => m.qrUri), photo]);
     for (const u of [...fresh.current]) if (kept.has(u)) fresh.current.delete(u);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
@@ -98,7 +110,7 @@ export default function PersonScreen() {
   }
 
   if (!person) return null;
-  const changedLook = { ...person, name: name || person.name, ...look };
+  const changedLook = { ...person, name: name || person.name, ...look, photoUri: photo };
 
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: 32 + insets.bottom }]} keyboardShouldPersistTaps="handled">
@@ -115,7 +127,13 @@ export default function PersonScreen() {
           accessibilityLabel="Name"
         />
       </View>
-      <Text style={styles.dim}>Tap the face to shuffle it.</Text>
+      <View style={styles.photoRow}>
+        <Button kind="ghost" label={photo ? 'Change photo' : 'Add a profile photo'} onPress={pickPhoto} />
+        {photo && <Button kind="ghost" label="Use the emoji" onPress={() => setPhoto(null)} />}
+      </View>
+      <Text style={styles.dim}>
+        {photo ? 'Tap the face to shuffle the ring colour. The photo takes the emoji\'s place.' : 'Tap the face to shuffle the emoji and colour.'}
+      </Text>
 
       <Text style={styles.h2}>Ways to pay {person.name}</Text>
       <Text style={styles.dim}>Whatever they use: GCash, Maya, a bank. Shown on Settle up whenever someone owes them.</Text>
@@ -177,6 +195,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   shuffle: { minWidth: theme.tap, minHeight: theme.tap, alignItems: 'center', justifyContent: 'center' },
   name: { flex: 1, ...theme.type.display, minHeight: theme.tap, borderBottomWidth: 3, borderColor: theme.color.line },
+  photoRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   h2: { ...theme.type.title, color: theme.color.ink, marginTop: 8 },
   dim: { ...theme.type.small, color: theme.color.inkDim, marginTop: -6 },
   card: { backgroundColor: theme.color.surface, borderRadius: theme.radius.md, padding: 12, gap: 10 },

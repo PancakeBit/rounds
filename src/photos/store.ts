@@ -39,12 +39,16 @@ const PICKED_PX = 1400; // receipts and QR codes need to stay readable, but not 
 // Keeps a picked or freshly taken picture of a receipt or a QR code, each kind in its own folder.
 // Receipts are not kept with the night's photos because a payment can move to another night;
 // deleting a night removes its receipts by name (deleteNight returns them).
-export async function keepPicture(where: { kind: 'receipt'; nightId: number } | { kind: 'qr'; personId: number }, uri: string): Promise<string> {
-  const dir = new Directory(Paths.document, where.kind === 'receipt' ? 'receipts' : 'qr');
+export async function keepPicture(
+  where: { kind: 'receipt'; nightId: number } | { kind: 'qr'; personId: number } | { kind: 'profile'; personId: number },
+  uri: string,
+): Promise<string> {
+  const folder = where.kind === 'receipt' ? 'receipts' : where.kind === 'qr' ? 'qr' : 'profiles';
+  const dir = new Directory(Paths.document, folder);
   if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-  const ref = await ImageManipulator.manipulate(uri).resize({ width: PICKED_PX }).renderAsync();
+  const ref = await ImageManipulator.manipulate(uri).resize({ width: where.kind === 'profile' ? FACE_PX : PICKED_PX }).renderAsync();
   const saved = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
-  const name = where.kind === 'receipt' ? `receipt-n${where.nightId}` : `qr-${where.personId}`;
+  const name = where.kind === 'receipt' ? `receipt-n${where.nightId}` : `${where.kind}-${where.personId}`;
   const dest = new File(dir, `${name}-${Date.now()}.jpg`);
   await new File(saved.uri).move(dest);
   return dest.uri;

@@ -84,7 +84,7 @@ export default function Lineup() {
             accessibilityHint={photoOf(m) ? 'Hold to go back to the emoji' : undefined}
             style={styles.cell}
           >
-            <Avatar person={m} photo={photoOf(m)} size={96} showName />
+            <Avatar person={m} photo={photoOf(m)} size={96} showName noProfile />
           </Tap>
         ))}
       </View>

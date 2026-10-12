@@ -7,7 +7,7 @@ import { itemShares, type ItemInput } from '../core/items';
 import { splitExpense, type ShareInput } from '../core/split';
 import type { StatExpense } from '../core/stats';
 
-export interface Person { id: number; name: string; emoji: string; color: string; archived: boolean }
+export interface Person { id: number; name: string; emoji: string; color: string; archived: boolean; photoUri: string | null }
 export interface NightMember extends Person { photoStart: string | null; photoEnd: string | null }
 export interface Night {
   id: number; title: string; startedAt: number; endedAt: number | null;
@@ -36,7 +36,7 @@ export interface ExpenseInput {
   receiptUri?: string | null;
 }
 
-type PersonRow = { id: number; name: string; emoji: string; color: string; archived: number };
+type PersonRow = { id: number; name: string; emoji: string; color: string; archived: number; photo_uri: string | null };
 type NightRow = { id: number; title: string; started_at: number; ended_at: number | null; group_photo: string | null; group_photo_start: string | null };
 type MemberRow = PersonRow & { photo_start: string | null; photo_end: string | null };
 type ExpenseRow = {
@@ -48,7 +48,9 @@ type ClaimRow = { item_id: number; person_id: number; count: number };
 type ShareRow = { expense_id: number; person_id: number; weight: number; extra_minor: number | null };
 type SettlementRow = { id: number; from_id: number; to_id: number; amount_minor: number; paid_at: number | null };
 
-const toPerson = (r: PersonRow): Person => ({ ...r, archived: r.archived === 1 });
+const toPerson = (r: PersonRow): Person => ({
+  id: r.id, name: r.name, emoji: r.emoji, color: r.color, archived: r.archived === 1, photoUri: r.photo_uri ?? null,
+});
 const toNight = (r: NightRow): Night => ({
   id: r.id, title: r.title, startedAt: r.started_at, endedAt: r.ended_at, groupPhotoStart: r.group_photo_start, groupPhoto: r.group_photo,
 });
@@ -103,6 +105,25 @@ export async function savePayMethods(db: SQLiteDatabase, personId: number, metho
   });
   const kept = new Set(clean.map(m => m.qrUri).filter(Boolean));
   return before.map(m => m.qrUri).filter((u): u is string => !!u && !kept.has(u));
+}
+
+// Sets or clears someone's profile picture. Returns the one it replaced, for the caller to delete.
+export async function setPersonPhoto(db: SQLiteDatabase, id: number, uri: string | null): Promise<string | null> {
+  const r = await db.getFirstAsync<{ photo_uri: string | null }>('SELECT photo_uri FROM people WHERE id = ?', id);
+  if (!r) throw new Error('They are no longer in the crew');
+  await db.runAsync('UPDATE people SET photo_uri = ? WHERE id = ?', uri, id);
+  return r.photo_uri && r.photo_uri !== uri ? r.photo_uri : null;
+}
+
+// What the crew is called on the home screen. Anything blank reads as the default.
+export const DEFAULT_GROUP_NAME = 'The Group';
+export async function getGroupName(db: SQLiteDatabase): Promise<string> {
+  return (await getSetting(db, 'group_name'))?.trim() || DEFAULT_GROUP_NAME;
+}
+export async function setGroupName(db: SQLiteDatabase, name: string): Promise<void> {
+  const t = name.trim();
+  if (!t) throw new Error('Give it a name');
+  await setSetting(db, 'group_name', t.slice(0, 30));
 }
 
 export async function setArchived(db: SQLiteDatabase, id: number, archived: boolean): Promise<void> {
@@ -361,6 +382,31 @@ export async function moveExpense(db: SQLiteDatabase, expenseId: number, toNight
     await db.runAsync('DELETE FROM settlements WHERE night_id IN (?, ?) AND paid_at IS NULL', row.night_id, toNightId);
   });
   return added;
+}
+
+// Every open night with what the home screen and person pages need to add them up (see core/across).
+export interface OpenNightFull {
+  night: Night;
+  members: NightMember[];
+  expenses: Expense[];
+  paid: Settlement[];
+  unpaid: Settlement[];
+}
+export async function loadOpenNights(db: SQLiteDatabase): Promise<OpenNightFull[]> {
+  const out: OpenNightFull[] = [];
+  for (const n of await listOpenNights(db)) {
+    const data = await getNight(db, n.id);
+    if (!data) continue;
+    const sett = await listSettlements(db, n.id);
+    out.push({
+      night: data.night,
+      members: data.members,
+      expenses: await listExpenses(db, n.id),
+      paid: sett.filter(s => s.paidAt != null),
+      unpaid: sett.filter(s => s.paidAt == null),
+    });
+  }
+  return out;
 }
 
 // Settlements

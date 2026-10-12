@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const LATEST = 5;
+const LATEST = 6;
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -131,6 +131,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
         ALTER TABLE expenses ADD COLUMN receipt_uri TEXT;
         UPDATE people SET color = '#9CB8EB' WHERE color = '#8CC3E8';
       `);
+    }
+    if (row.user_version < 6) {
+      // v6: a profile picture per person, shown in place of their emoji wherever they appear.
+      await db.execAsync('ALTER TABLE people ADD COLUMN photo_uri TEXT;');
     }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);
   });

@@ -38,7 +38,7 @@ export default function Crew() {
     setName('');
     setLook(l => l + 1);
     load();
-    router.push(`/person/${newId}`); // straight on to how to pay them, which they can skip
+    router.push(`/person/${newId}/edit`); // straight on to how to pay them, which they can skip
   }
 
   async function reshuffle(p: Person) {
@@ -92,7 +92,7 @@ export default function Crew() {
               {p.archived ? 'Retired' : ways.get(p.id)?.length ? ways.get(p.id)!.join(' · ') : 'No ways to pay yet'}
             </Text>
           </View>
-          <Button kind="ghost" label="Details" onPress={() => router.push(`/person/${p.id}`)} />
+          <Button kind="ghost" label="Details" onPress={() => router.push(`/person/${p.id}/edit`)} />
         </View>
       ))}
     </ScrollView>

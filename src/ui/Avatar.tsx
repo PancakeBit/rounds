@@ -2,15 +2,17 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme } from './theme';
 
 interface Props {
-  person: { name: string; emoji: string; color: string };
+  person: { name: string; emoji: string; color: string; photoUri?: string | null };
   photo?: string | null;
   size?: number;
   showName?: boolean;
   dimmed?: boolean;
+  noProfile?: boolean; // the night line-up: an empty slot must look empty until tonight's photo is taken
 }
 
-// Emoji by default. A night photo, when there is one, fills the same chalk ring.
-export function Avatar({ person, photo, size = 48, showName = false, dimmed = false }: Props) {
+// A night photo when there is one, else their profile picture, else their emoji, all in the same chalk ring.
+export function Avatar({ person, photo: nightPhoto, size = 48, showName = false, dimmed = false, noProfile = false }: Props) {
+  const photo = nightPhoto || (noProfile ? null : person.photoUri);
   const ring = Math.max(2, Math.round(size / 22));
   const inner = size - ring * 2;
   return (

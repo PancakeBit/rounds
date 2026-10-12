@@ -13,7 +13,7 @@ export interface BreakdownExpense extends ExpenseLike {
 
 export interface PersonBreakdown {
   total: number;
-  lines: { label: string; amount: number }[];
+  lines: { label: string; amount: number; payerId: number }[]; // payerId: who paid for that line
 }
 
 // "Who had what": for each person, what their share of the night is made of, across every payment.
@@ -21,18 +21,18 @@ export interface PersonBreakdown {
 // A treat counts towards whoever paid. Everyone's totals add up to the whole tab.
 export function whoHadWhat(expenses: BreakdownExpense[], memberIds: number[]): Map<number, PersonBreakdown> {
   const acc = new Map<number, PersonBreakdown>();
-  const add = (p: number, label: string, amount: number) => {
+  const add = (p: number, label: string, amount: number, payerId: number) => {
     if (amount <= 0) return;
     const b = acc.get(p) ?? { total: 0, lines: [] };
     b.total += amount;
-    b.lines.push({ label, amount });
+    b.lines.push({ label, amount, payerId });
     acc.set(p, b);
   };
 
   for (const e of expenses) {
     const title = e.note || categoriesLabel(e.categories);
     if (e.isTreat) {
-      add(e.payerId, `${title} (on me)`, e.amount);
+      add(e.payerId, `${title} (on me)`, e.amount, e.payerId);
       continue;
     }
     const items = e.items ?? [];
@@ -41,15 +41,15 @@ export function whoHadWhat(expenses: BreakdownExpense[], memberIds: number[]): M
       items.forEach((it, i) => {
         for (const [p, amt] of r.perItem[i]) {
           const count = it.claims.find(c => c.personId === p)?.count ?? 1;
-          add(p, `${it.name || `Item ${i + 1}`}${count > 1 ? ` ×${count}` : ''}`, amt);
+          add(p, `${it.name || `Item ${i + 1}`}${count > 1 ? ` ×${count}` : ''}`, amt, e.payerId);
         }
       });
-      for (const [p, amt] of r.service) add(p, `${title} service`, amt);
+      for (const [p, amt] of r.service) add(p, `${title} service`, amt, e.payerId);
       continue;
     }
     // Plain payments, and the stored shares as a fallback if the items no longer split (members changed).
     const s = splitExpense(e.amount, e.shares);
-    if (s.ok) for (const [p, amt] of s.owed) add(p, title, amt);
+    if (s.ok) for (const [p, amt] of s.owed) add(p, title, amt, e.payerId);
   }
 
   const order = [...memberIds, ...[...acc.keys()].filter(p => !memberIds.includes(p))];

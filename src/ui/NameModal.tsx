@@ -8,10 +8,13 @@ interface Props {
   initial: string;
   onDone: (title: string) => void;
   onClose: () => void;
+  title?: string;
+  placeholder?: string;
+  maxLength?: number;
 }
 
-// Renaming a night that has already started.
-export function NameModal({ visible, initial, onDone, onClose }: Props) {
+// Renaming something: a night that has already started, or the group.
+export function NameModal({ visible, initial, onDone, onClose, title = 'Name the night', placeholder = 'Karaoke outing!', maxLength = 40 }: Props) {
   const [text, setText] = useState(initial);
   useEffect(() => {
     if (visible) setText(initial);
@@ -21,19 +24,19 @@ export function NameModal({ visible, initial, onDone, onClose }: Props) {
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>Name the night</Text>
+          <Text style={styles.title}>{title}</Text>
           <TextInput
             autoFocus
             selectTextOnFocus
             value={text}
             onChangeText={setText}
-            maxLength={40}
-            placeholder="Karaoke outing!"
+            maxLength={maxLength}
+            placeholder={placeholder}
             placeholderTextColor={theme.color.inkDim}
             returnKeyType="done"
             onSubmitEditing={() => ok && onDone(text)}
             style={styles.input}
-            accessibilityLabel="Night name"
+            accessibilityLabel={title}
           />
           <View style={styles.row}>
             <Button kind="ghost" label="Cancel" onPress={onClose} />
