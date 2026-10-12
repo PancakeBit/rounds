@@ -23,3 +23,15 @@ export function settle(net: Map<number, number>): Transfer[] {
   }
   return out;
 }
+
+// True when these transfers, all paid, leave everyone at exactly zero. Settle up keeps a plan that still
+// does this (so a part payment doesn't reshuffle who pays whom) and only works out a new one when it doesn't.
+export function stillSettles(net: Map<number, number>, transfers: Transfer[]): boolean {
+  const left = new Map(net);
+  for (const t of transfers) {
+    if (!left.has(t.fromId) || !left.has(t.toId) || t.amount <= 0) return false;
+    left.set(t.fromId, left.get(t.fromId)! + t.amount);
+    left.set(t.toId, left.get(t.toId)! - t.amount);
+  }
+  return [...left.values()].every(v => v === 0);
+}

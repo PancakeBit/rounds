@@ -66,7 +66,18 @@ Updated 2026-10-12 after the first device run. Changes from that feedback: plain
       - both group shots and no faces
       - everything
     - The same night always opens on the same layout, and different nights open on different ones.
-17. A past night is read-only: no bottom panel and no Add someone. Its name can still be changed from the top bar.
+17. A past night is read-only: no bottom panel and no Add someone. Its name can still be changed from the top bar. At the bottom it says "All square. This night is closed." with **Reopen this night**: tap it and the night is open again (it moves back under Still open on Home, ticks kept).
+
+## Ways to pay, part payments, fixing mistakes (v1.3)
+
+- **Crew colours:** anyone who had the light blue now shows a softer periwinkle (`#9CB8EB`). Nobody else's colour changes.
+- **Ways to pay:** The crew → Add `Lee` → Lee's page opens. Name the first way `GCash`, number `0917 123 4567`, **+ Add QR code** → From gallery → pick any QR picture. **+ Add a way to pay**: `BPI` `1293 2512 3123`, no QR. Save. The crew list shows "GCash · BPI" under Lee. Open Lee again: both are there; tap the QR thumbnail → full screen, tap to close. Leave a row with a number but no name → Save says "Give each way to pay a name, like GCash". Double-tap Save → you go back one screen, not two.
+- **Settle up shows them:** in a night where someone owes Lee, the row has `GCash 0917 123 4567` (GCash in Lee's colour) with **Copy** and **QR**, and `BPI …` with Copy only. Copy → "Copied", paste it somewhere to check. QR → full screen with "Lee's GCash · 12.00". Someone with no ways saved shows "No ways to pay … saved yet".
+- **Paid part of it:** on a row for 12.00 tap **Paid part of it** → `5` → Paid that. The row now says 7.00 to the same person, a ticked 5.00 row appears, and **no other row changes**. Leave and reopen Settle up: still the same. Enter more than they owe → "That's more than the 12.00 they owe". Enter exactly the rest → it just ticks.
+- **Receipt photo:** in Someone paid, **+ Add a photo of the receipt** → Take a photo (or From gallery). The thumbnail shows; tap it → full screen. Save → the feed row says "· receipt". Open it again: Change and Remove work. Leave without saving after adding one → nothing changes.
+- **Move to another night:** with two nights open, open a payment that includes someone not in the other night → **Move to Friday drinks** → confirm. You're back on the night: the payment is gone from here, and on Friday it's there, with the missing person added (an alert says who joined).
+- **Delete a night:** at the bottom of a night's list, **Delete this night** → "Delete …? Every payment, settle-up tick and photo from this night goes." → Keep it does nothing; Delete takes you Home and the night is gone. A payment that was moved out of it earlier keeps its receipt photo.
+
 
 ## Phone settings
 

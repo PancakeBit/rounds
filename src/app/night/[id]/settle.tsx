@@ -4,14 +4,18 @@ import { Tap } from '../../../ui/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import {
-  endNight, generateSettlements, getNight, listSettlements, setSettlementPaid,
-  type NightMember, type Settlement,
+  endNight, generateSettlements, getNight, listPayMethods, listSettlements, payPart, setSettlementPaid,
+  type NightMember, type PayMethod, type Settlement,
 } from '../../../db/repo';
 import { formatMoney as money } from '../../../core/money';
 import { Avatar } from '../../../ui/Avatar';
 import { Button } from '../../../ui/Button';
+import { AmountModal } from '../../../ui/AmountModal';
 import { AllSquare, Land, Strike } from '../../../ui/chalk';
+import { ImageViewer } from '../../../ui/ImageViewer';
 import { guarded } from '../../../ui/oops';
 import { theme } from '../../../ui/theme';
 
@@ -27,6 +31,10 @@ export default function SettleUp() {
   const [shot, setShot] = useState(false);
   // Every "N to square up" figure shown so far; older ones are drawn struck through.
   const [counts, setCounts] = useState<number[]>([]);
+  const [ways, setWays] = useState<Map<number, PayMethod[]>>(new Map());
+  const [qr, setQr] = useState<{ uri: string; caption: string } | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [partOf, setPartOf] = useState<Settlement | null>(null);
 
   const show = useCallback((next: Settlement[]) => {
     setRows(next);
@@ -62,10 +70,12 @@ export default function SettleUp() {
       if (!data) return undefined;
       if (data.night.endedAt == null) await generateSettlements(db, nightId);
       const list = await listSettlements(db, nightId);
-      return { data, list };
+      const pm = await listPayMethods(db, data.members.map(m => m.id));
+      return { data, list, pm };
     });
     if (!result) return;
-    const { data, list } = result;
+    const { data, list, pm } = result;
+    setWays(pm);
     setTitle(data.night.title);
     setMembers(data.members);
     setEnded(data.night.endedAt != null);
@@ -87,6 +97,29 @@ export default function SettleUp() {
       });
       if (!next) return;
       show(next);
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  async function copy(key: string, text: string) {
+    const ok = await guarded("Couldn't copy that", () => Clipboard.setStringAsync(text));
+    if (!ok) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCopied(key);
+    setTimeout(() => setCopied(c => (c === key ? null : c)), 1500);
+  }
+
+  async function paidPart(r: Settlement, amount: number) {
+    setPartOf(null);
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const next = await guarded("Couldn't save that", async () => {
+        await payPart(db, r.id, amount);
+        return listSettlements(db, nightId);
+      });
+      if (next) show(next);
     } finally {
       busy.current = false;
     }
@@ -132,9 +165,10 @@ export default function SettleUp() {
               const from = byId.get(r.fromId);
               const to = byId.get(r.toId);
               const done = r.paidAt != null;
+              const methods = to ? ways.get(to.id) ?? [] : [];
               return (
+                <View key={r.id} style={styles.card}>
                 <Tap
-                  key={r.id}
                   onPress={() => toggle(r)}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: done }}
@@ -158,6 +192,43 @@ export default function SettleUp() {
                     {done && <Text style={styles.tick}>✓</Text>}
                   </View>
                 </Tap>
+                {!done && !ended && (
+                  <View style={styles.payInfo}>
+                    {methods.map((m, i) => {
+                      const key = `${r.id}-${i}`;
+                      return (
+                        <View key={key} style={styles.method}>
+                          <Text style={styles.methodText} numberOfLines={2} selectable>
+                            <Text style={[styles.methodLabel, { color: to?.color ?? theme.color.ink }]}>{m.label}</Text>
+                            {m.number ? `  ${m.number}` : ''}
+                          </Text>
+                          {!!m.number && (
+                            <Tap onPress={() => copy(key, m.number)} style={styles.chip} accessibilityRole="button" accessibilityLabel={`Copy ${m.label} number`}>
+                              <Text style={styles.chipText}>{copied === key ? 'Copied' : 'Copy'}</Text>
+                            </Tap>
+                          )}
+                          {!!m.qrUri && (
+                            <Tap
+                              onPress={() => setQr({ uri: m.qrUri!, caption: `${to?.name}'s ${m.label} · ${money(r.amount)}` })}
+                              style={styles.chip}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Show ${to?.name}'s ${m.label} QR code`}
+                            >
+                              <Text style={styles.chipText}>QR</Text>
+                            </Tap>
+                          )}
+                        </View>
+                      );
+                    })}
+                    {methods.length === 0 && to && (
+                      <Text style={styles.small}>No ways to pay {to.name} saved yet. Add them under The crew.</Text>
+                    )}
+                    <Tap onPress={() => setPartOf(r)} style={styles.partBtn} accessibilityRole="button" accessibilityLabel={`${from?.name} paid part of it`}>
+                      <Text style={styles.chipText}>Paid part of it</Text>
+                    </Tap>
+                  </View>
+                )}
+                </View>
               );
             })}
           </>
@@ -166,6 +237,15 @@ export default function SettleUp() {
         {allPaid && <Button kind="go" label="Close the night" onPress={finish} />}
         {ended && !shot && <Button kind="ghost" label="See the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />}
       </ScrollView>
+      <ImageViewer uri={qr?.uri ?? null} caption={qr?.caption} onClose={() => setQr(null)} />
+      <AmountModal
+        visible={partOf != null}
+        title={partOf ? `How much did ${byId.get(partOf.fromId)?.name} pay?` : ''}
+        hint={partOf ? `Of the ${money(partOf.amount)} they owe ${byId.get(partOf.toId)?.name}. The rest stays on the list.` : undefined}
+        confirm="Paid that"
+        onDone={amt => partOf && paidPart(partOf, amt)}
+        onClose={() => setPartOf(null)}
+      />
       <AllSquare visible={shot} line={`${title} is settled.`}>
         <Button kind="dark" label="One more for the board" onPress={() => router.replace(`/night/${nightId}/lineup?phase=end`)} />
         <Button kind="dark" label="Straight to the recap" onPress={() => router.replace(`/night/${nightId}/recap`)} />
@@ -184,6 +264,21 @@ const styles = StyleSheet.create({
   countOld: { ...theme.type.display, color: theme.color.ink, opacity: 0.45 },
   countWord: { ...theme.type.big, color: theme.color.ink, textTransform: 'uppercase', paddingBottom: 10 },
   dim: { ...theme.type.body, color: theme.color.inkDim },
+  card: { backgroundColor: theme.color.surface, borderRadius: theme.radius.md, overflow: 'hidden' },
+  payInfo: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.color.line, paddingTop: 10 },
+  method: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  methodText: { flex: 1, ...theme.type.bodyBold, color: theme.color.ink, fontVariant: ['tabular-nums'] },
+  methodLabel: { ...theme.type.bodyBold },
+  chip: {
+    minHeight: 44, minWidth: 64, paddingHorizontal: 12, borderRadius: theme.radius.md, borderWidth: 2, borderColor: theme.color.line,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: theme.color.bg,
+  },
+  chipText: { ...theme.type.smallBold, color: theme.color.ink },
+  partBtn: {
+    minHeight: 44, alignSelf: 'flex-start', paddingHorizontal: 14, borderRadius: theme.radius.md, borderWidth: 2,
+    borderColor: theme.color.line, justifyContent: 'center',
+  },
+  small: { ...theme.type.small, color: theme.color.inkDim },
   row: {
     minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md, paddingHorizontal: 16,

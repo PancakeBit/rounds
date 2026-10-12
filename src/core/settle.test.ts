@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { settle } from './settle';
+import { settle, stillSettles } from './settle';
 
 describe('settle', () => {
   it('largest debtor pays largest creditor first', () => {
@@ -29,5 +29,22 @@ describe('settle', () => {
         return [...after.values()].every(v => v === 0) && transfers.length <= Math.max(0, all.length - 1);
       },
     ));
+  });
+});
+
+describe('stillSettles', () => {
+  // A owes 100, B owes 60, C is owed 90, D is owed 70.
+  const net = new Map([[1, -10000], [2, -6000], [3, 9000], [4, 7000]]);
+  it('accepts a plan that clears everyone, in any shape', () => {
+    expect(stillSettles(net, settle(net))).toBe(true);
+    expect(stillSettles(net, [
+      { fromId: 1, toId: 3, amount: 9000 }, { fromId: 1, toId: 4, amount: 1000 }, { fromId: 2, toId: 4, amount: 6000 },
+    ])).toBe(true);
+  });
+  it('rejects a plan that is off by a cent, names a stranger, or is empty while someone owes', () => {
+    expect(stillSettles(net, [{ fromId: 1, toId: 3, amount: 9000 }, { fromId: 1, toId: 4, amount: 999 }, { fromId: 2, toId: 4, amount: 6000 }])).toBe(false);
+    expect(stillSettles(net, [{ fromId: 9, toId: 3, amount: 1 }])).toBe(false);
+    expect(stillSettles(net, [])).toBe(false);
+    expect(stillSettles(new Map([[1, 0]]), [])).toBe(true);
   });
 });

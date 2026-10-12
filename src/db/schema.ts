@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const LATEST = 4;
+const LATEST = 5;
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -113,6 +113,23 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
           PRIMARY KEY (item_id, person_id)
         );
         CREATE INDEX expense_items_by_expense ON expense_items (expense_id, position);
+      `);
+    }
+    if (row.user_version < 5) {
+      // v5: each person's ways to get paid (a name, a number, an optional QR picture), and a receipt photo per payment.
+      // The crew's light blue moved off a stock cyan to a chalk periwinkle; friends who had it follow.
+      await db.execAsync(`
+        CREATE TABLE pay_methods (
+          id INTEGER PRIMARY KEY NOT NULL,
+          person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          label TEXT NOT NULL,
+          number TEXT NOT NULL DEFAULT '',
+          qr_uri TEXT
+        );
+        CREATE INDEX pay_methods_by_person ON pay_methods (person_id, position);
+        ALTER TABLE expenses ADD COLUMN receipt_uri TEXT;
+        UPDATE people SET color = '#9CB8EB' WHERE color = '#8CC3E8';
       `);
     }
     await db.execAsync(`PRAGMA user_version = ${LATEST}`);

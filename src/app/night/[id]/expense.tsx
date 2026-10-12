@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -8,7 +8,10 @@ import type { Category } from '../../../core/categories';
 import { formatMoney as money, minorToInput, parseMoney } from '../../../core/money';
 import { itemShares, splitItems, type ItemInput } from '../../../core/items';
 import { splitExpense, type ShareInput } from '../../../core/split';
-import { getNight, listExpenses, saveExpense, type NightMember } from '../../../db/repo';
+import { getNight, listExpenses, listOpenNights, moveExpense, saveExpense, type NightMember, type OpenNight } from '../../../db/repo';
+import { pickPicture } from '../../../photos/pick';
+import { dropFile, keepPicture } from '../../../photos/store';
+import { ImageViewer } from '../../../ui/ImageViewer';
 import { AmountPad } from '../../../ui/AmountPad';
 import { Avatar } from '../../../ui/Avatar';
 import { Button } from '../../../ui/Button';
@@ -45,6 +48,11 @@ export default function ExpenseScreen() {
   const [isTreat, setIsTreat] = useState(false);
   const [shares, setShares] = useState<Record<number, ShareState>>({});
   const [createdAt, setCreatedAt] = useState<number | undefined>();
+  const [receipt, setReceipt] = useState<string | null>(null);
+  const savedReceipt = useRef<string | null>(null); // what is stored now; replaced or removed ones are deleted on save
+  const freshReceipts = useRef(new Set<string>()); // taken on this visit; unsaved ones are deleted on leaving
+  const [viewReceipt, setViewReceipt] = useState(false);
+  const [otherNights, setOtherNights] = useState<OpenNight[]>([]);
   const [extraFor, setExtraFor] = useState<NightMember | null>(null);
   const [saving, setSaving] = useState(false);
   // null: one amount split by shares. A list: the payment broken into items people claim.
@@ -70,6 +78,9 @@ export default function ExpenseScreen() {
         setNote(existing.note);
         setIsTreat(existing.isTreat);
         setCreatedAt(existing.createdAt);
+        setReceipt(existing.receiptUri);
+        savedReceipt.current = existing.receiptUri;
+        setOtherNights((await listOpenNights(db)).filter(n => n.id !== nightId));
         if (existing.items.length) {
           setItems([...existing.items.map(it => draft(it.name, minorToInput(it.price), it.claims)), draft()]);
           setServiceText(existing.service ? minorToInput(existing.service) : '');
@@ -189,28 +200,76 @@ export default function ExpenseScreen() {
     });
   }
 
+  // Unsaved receipt photos from this visit are deleted when leaving without saving.
+  useEffect(() => {
+    const fresh = freshReceipts.current;
+    return () => { for (const u of fresh) dropFile(u); };
+  }, []);
+
+  async function addReceipt() {
+    const uri = await pickPicture('Receipt photo');
+    if (!uri) return;
+    const kept = await guarded("Couldn't keep that picture", () => keepPicture({ kind: 'receipt', nightId }, uri));
+    if (!kept) return;
+    freshReceipts.current.add(kept);
+    setReceipt(kept);
+  }
+
+  // Writes the payment. Returns its id, or undefined if it didn't save.
+  async function persist(): Promise<number | undefined> {
+    if (!canSave || amount == null || payerId == null) return undefined;
+    const id = await guarded("Couldn't save that", async () => {
+      if (items && itemSave?.ok) {
+        return saveExpense(db, {
+          id: editingId, nightId, payerId, amount: itemSave.amount, categories, note: note.trim(), isTreat,
+          shares: itemSave.shares, createdAt, items: itemList, service: Math.max(0, service), receiptUri: receipt,
+        });
+      }
+      return saveExpense(db, { id: editingId, nightId, payerId, amount, categories, note: note.trim(), isTreat, shares: shareList, createdAt, receiptUri: receipt });
+    });
+    if (id === undefined) return undefined;
+    if (receipt) freshReceipts.current.delete(receipt);
+    if (savedReceipt.current && savedReceipt.current !== receipt) dropFile(savedReceipt.current);
+    savedReceipt.current = receipt;
+    return id;
+  }
+
   async function save() {
-    if (busy.current || !canSave || amount == null || payerId == null) return;
+    if (busy.current) return;
     busy.current = true;
     setSaving(true);
-    const ok = await guarded("Couldn't save that", async () => {
-      if (items && itemSave?.ok) {
-        await saveExpense(db, {
-          id: editingId, nightId, payerId, amount: itemSave.amount, categories, note: note.trim(), isTreat,
-          shares: itemSave.shares, createdAt, items: itemList, service: Math.max(0, service),
-        });
-      } else {
-        await saveExpense(db, { id: editingId, nightId, payerId, amount, categories, note: note.trim(), isTreat, shares: shareList, createdAt });
-      }
-      return true;
-    });
-    if (!ok) {
+    const id = await persist();
+    if (id === undefined) {
       busy.current = false;
       setSaving(false);
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
+  }
+
+  // Saves what's on screen first, then moves it. Anyone in it who isn't in that night joins it.
+  function moveTo(target: OpenNight) {
+    Alert.alert(`Move this to ${target.title}?`, 'Anyone in it who is not out that night yet will be added to it. If someone already paid for it on Settle up here, this night will show that money going back.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Move',
+        onPress: async () => {
+          if (busy.current) return;
+          busy.current = true;
+          setSaving(true);
+          const id = await persist();
+          const added = id === undefined ? undefined : await guarded("Couldn't move it", () => moveExpense(db, id, target.id));
+          busy.current = false;
+          setSaving(false);
+          if (added === undefined) return;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          const names = added.map(p => members.find(m => m.id === p)?.name).filter(Boolean);
+          if (names.length) Alert.alert('Moved', `${names.join(' and ')} joined ${target.title}.`);
+          router.back();
+        },
+      },
+    ]);
   }
 
   return (
@@ -407,9 +466,33 @@ export default function ExpenseScreen() {
         {items && unpriced.length === 0 && itemList.length > 0 && preview?.ok && itemSave && !itemSave.ok && (
           <Text style={styles.error}>{itemSave.error}</Text>
         )}
+        <Text style={styles.h2}>Receipt photo</Text>
+        {receipt ? (
+          <View style={styles.receiptRow}>
+            <Tap onPress={() => setViewReceipt(true)} accessibilityRole="imagebutton" accessibilityLabel="Show the receipt photo" style={styles.receiptThumb}>
+              <Image source={{ uri: receipt }} style={styles.receiptImg} />
+            </Tap>
+            <Button kind="ghost" label="Change" onPress={addReceipt} />
+            <Button kind="ghost" label="Remove" onPress={() => setReceipt(null)} />
+          </View>
+        ) : (
+          <Button kind="ghost" label="+ Add a photo of the receipt" onPress={addReceipt} />
+        )}
+
         <Button label={editingId != null ? 'Save changes' : 'Save'} onPress={save} disabled={!canSave || saving} style={styles.save} />
+
+        {editingId != null && otherNights.length > 0 && (
+          <>
+            <Text style={styles.h2}>Wrong night?</Text>
+            <Text style={styles.hint}>Move this payment to another open night.</Text>
+            {otherNights.map(n => (
+              <Button key={n.id} kind="ghost" label={`Move to ${n.title}`} onPress={() => moveTo(n)} disabled={!canSave || saving} />
+            ))}
+          </>
+        )}
       </ScrollView>
 
+      <ImageViewer uri={viewReceipt ? receipt : null} caption="Receipt" onClose={() => setViewReceipt(false)} />
       <ExtraModal
         person={extraFor}
         initial={extraFor ? shares[extraFor.id]?.extra ?? null : null}
@@ -469,6 +552,9 @@ const styles = StyleSheet.create({
   pct: { ...theme.type.small, color: theme.color.inkDim },
   error: { ...theme.type.bodyBold, color: theme.color.owes, textAlign: 'center' },
   save: { minHeight: 72, marginTop: 8 },
+  receiptRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  receiptThumb: { width: 72, height: 96, borderRadius: theme.radius.sm, overflow: 'hidden', backgroundColor: theme.color.surface },
+  receiptImg: { width: 72, height: 96 },
   serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   serviceLabel: { flex: 1, ...theme.type.bodyBold, color: theme.color.ink },
   serviceInput: {

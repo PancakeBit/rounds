@@ -1,7 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { nightBalances, type Transfer } from '../core/balances';
 import { joinCategories, parseCategories, type Category } from '../core/categories';
-import { settle } from '../core/settle';
+import { formatMoney } from '../core/money';
+import { settle, stillSettles } from '../core/settle';
 import { itemShares, type ItemInput } from '../core/items';
 import { splitExpense, type ShareInput } from '../core/split';
 import type { StatExpense } from '../core/stats';
@@ -13,7 +14,12 @@ export interface Night {
   groupPhotoStart: string | null; groupPhoto: string | null; // group shots at the start and the end
 }
 // `items` is empty for a plain split. With items, `shares` holds each person's item total (see core/items).
-export interface Expense extends StatExpense { id: number; nightId: number; note: string; items: ItemInput[]; service: number }
+export interface Expense extends StatExpense {
+  id: number; nightId: number; note: string; items: ItemInput[]; service: number;
+  receiptUri: string | null; // a photo of the paper receipt, kept on the phone
+}
+// One way to pay someone: a name the person chose ("GCash", "BPI"), a number, and an optional QR picture.
+export interface PayMethod { label: string; number: string; qrUri: string | null }
 export interface Settlement extends Transfer { id: number; paidAt: number | null }
 export interface ExpenseInput {
   id?: number;
@@ -27,6 +33,7 @@ export interface ExpenseInput {
   createdAt?: number;
   items?: ItemInput[]; // when present, amount and shares are worked out from them on save
   service?: number;
+  receiptUri?: string | null;
 }
 
 type PersonRow = { id: number; name: string; emoji: string; color: string; archived: number };
@@ -34,7 +41,7 @@ type NightRow = { id: number; title: string; started_at: number; ended_at: numbe
 type MemberRow = PersonRow & { photo_start: string | null; photo_end: string | null };
 type ExpenseRow = {
   id: number; night_id: number; payer_id: number; amount_minor: number;
-  category: string; note: string; is_treat: number; created_at: number; service_minor: number;
+  category: string; note: string; is_treat: number; created_at: number; service_minor: number; receipt_uri: string | null;
 };
 type ItemRow = { id: number; expense_id: number; name: string; price_minor: number };
 type ClaimRow = { item_id: number; person_id: number; count: number };
@@ -65,6 +72,37 @@ export async function updatePerson(db: SQLiteDatabase, id: number, p: { name: st
   const name = p.name.trim();
   if (!name) throw new Error('Give them a name first');
   await db.runAsync('UPDATE people SET name = ?, emoji = ?, color = ? WHERE id = ?', name, p.emoji, p.color, id);
+}
+
+export async function listPayMethods(db: SQLiteDatabase, personIds: number[]): Promise<Map<number, PayMethod[]>> {
+  const out = new Map<number, PayMethod[]>(personIds.map(id => [id, []]));
+  if (personIds.length === 0) return out;
+  const rows = await db.getAllAsync<{ person_id: number; label: string; number: string; qr_uri: string | null }>(
+    `SELECT person_id, label, number, qr_uri FROM pay_methods WHERE person_id IN (${personIds.map(() => '?').join(',')}) ORDER BY person_id, position`,
+    ...personIds,
+  );
+  for (const r of rows) out.get(r.person_id)?.push({ label: r.label, number: r.number, qrUri: r.qr_uri });
+  return out;
+}
+
+// Replaces the person's list. Returns the QR pictures no longer used, for the caller to delete.
+export async function savePayMethods(db: SQLiteDatabase, personId: number, methods: PayMethod[]): Promise<string[]> {
+  const clean = methods
+    .map(m => ({ label: m.label.trim(), number: m.number.trim(), qrUri: m.qrUri }))
+    .filter(m => m.label || m.number || m.qrUri);
+  if (clean.some(m => !m.label)) throw new Error('Give each way to pay a name, like GCash');
+  const before = (await listPayMethods(db, [personId])).get(personId) ?? [];
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM pay_methods WHERE person_id = ?', personId);
+    for (const [position, m] of clean.entries()) {
+      await db.runAsync(
+        'INSERT INTO pay_methods (person_id, position, label, number, qr_uri) VALUES (?, ?, ?, ?, ?)',
+        personId, position, m.label, m.number, m.qrUri,
+      );
+    }
+  });
+  const kept = new Set(clean.map(m => m.qrUri).filter(Boolean));
+  return before.map(m => m.qrUri).filter((u): u is string => !!u && !kept.has(u));
 }
 
 export async function setArchived(db: SQLiteDatabase, id: number, archived: boolean): Promise<void> {
@@ -155,6 +193,25 @@ export async function setGroupPhoto(db: SQLiteDatabase, nightId: number, phase: 
   await db.runAsync(`UPDATE nights SET ${column} = ? WHERE id = ?`, uri, nightId);
 }
 
+// Mistakes happen after closing: a closed night can be opened again. Its paid ticks stay.
+export async function reopenNight(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('UPDATE nights SET ended_at = NULL WHERE id = ?', id);
+}
+
+// Deletes the night and everything in it (payments, items, settle-up). Photo files are the caller's to remove.
+// Returns every photo the night referred to.
+export async function deleteNight(db: SQLiteDatabase, id: number): Promise<string[]> {
+  const n = await db.getFirstAsync<NightRow>('SELECT * FROM nights WHERE id = ?', id);
+  if (!n) throw new Error('That night no longer exists');
+  const faces = await db.getAllAsync<{ photo_start: string | null; photo_end: string | null }>(
+    'SELECT photo_start, photo_end FROM night_members WHERE night_id = ?', id,
+  );
+  const receipts = await db.getAllAsync<{ receipt_uri: string | null }>('SELECT receipt_uri FROM expenses WHERE night_id = ?', id);
+  await db.runAsync('DELETE FROM nights WHERE id = ?', id);
+  return [n.group_photo, n.group_photo_start, ...faces.flatMap(f => [f.photo_start, f.photo_end]), ...receipts.map(r => r.receipt_uri)]
+    .filter((u): u is string => !!u);
+}
+
 export async function endNight(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('UPDATE nights SET ended_at = ? WHERE id = ? AND ended_at IS NULL', Date.now(), id);
 }
@@ -205,6 +262,7 @@ export async function listExpenses(db: SQLiteDatabase, nightId: number): Promise
     shares: shares.get(r.id) ?? [],
     items: items.get(r.id) ?? [],
     service: r.service_minor,
+    receiptUri: r.receipt_uri,
   }));
 }
 
@@ -240,15 +298,15 @@ export async function saveExpense(db: SQLiteDatabase, raw: ExpenseInput): Promis
   await db.withTransactionAsync(async () => {
     if (input.id != null) {
       await db.runAsync(
-        'UPDATE expenses SET payer_id = ?, amount_minor = ?, category = ?, note = ?, is_treat = ?, service_minor = ? WHERE id = ?',
-        input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, service, input.id,
+        'UPDATE expenses SET payer_id = ?, amount_minor = ?, category = ?, note = ?, is_treat = ?, service_minor = ?, receipt_uri = ? WHERE id = ?',
+        input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, service, input.receiptUri ?? null, input.id,
       );
       await db.runAsync('DELETE FROM expense_shares WHERE expense_id = ?', input.id);
       await db.runAsync('DELETE FROM expense_items WHERE expense_id = ?', input.id);
     } else {
       const r = await db.runAsync(
-        'INSERT INTO expenses (night_id, payer_id, amount_minor, category, note, is_treat, created_at, service_minor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        input.nightId, input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(), service,
+        'INSERT INTO expenses (night_id, payer_id, amount_minor, category, note, is_treat, created_at, service_minor, receipt_uri) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        input.nightId, input.payerId, input.amount, joinCategories(input.categories), input.note, input.isTreat ? 1 : 0, input.createdAt ?? Date.now(), service, input.receiptUri ?? null,
       );
       id = r.lastInsertRowId;
     }
@@ -284,6 +342,27 @@ export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<Exp
   return snapshot;
 }
 
+// Moves a payment to another open night. Anyone in it who isn't in that night joins it (like a late arrival).
+// Returns who was added.
+export async function moveExpense(db: SQLiteDatabase, expenseId: number, toNightId: number): Promise<number[]> {
+  const row = await db.getFirstAsync<{ night_id: number }>('SELECT night_id FROM expenses WHERE id = ?', expenseId);
+  if (!row) throw new Error('That one is already gone');
+  if (row.night_id === toNightId) return [];
+  await assertOpen(db, row.night_id);
+  await assertOpen(db, toNightId);
+  const e = (await listExpenses(db, row.night_id)).find(x => x.id === expenseId)!;
+  const involved = new Set([e.payerId, ...e.shares.map(s => s.personId), ...e.items.flatMap(i => i.claims.map(c => c.personId))]);
+  const there = new Set((await db.getAllAsync<{ person_id: number }>('SELECT person_id FROM night_members WHERE night_id = ?', toNightId)).map(r => r.person_id));
+  const added = [...involved].filter(p => !there.has(p));
+  await db.withTransactionAsync(async () => {
+    for (const p of added) await db.runAsync('INSERT INTO night_members (night_id, person_id) VALUES (?, ?)', toNightId, p);
+    await db.runAsync('UPDATE expenses SET night_id = ? WHERE id = ?', toNightId, expenseId);
+    // Both nights' plans are now out of date; Settle up works them out again when opened.
+    await db.runAsync('DELETE FROM settlements WHERE night_id IN (?, ?) AND paid_at IS NULL', row.night_id, toNightId);
+  });
+  return added;
+}
+
 // Settlements
 
 export async function listSettlements(db: SQLiteDatabase, nightId: number): Promise<Settlement[]> {
@@ -296,8 +375,12 @@ export async function generateSettlements(db: SQLiteDatabase, nightId: number): 
   const data = await getNight(db, nightId);
   if (!data) throw new Error('That night no longer exists');
   const expenses = await listExpenses(db, nightId);
-  const paid = (await listSettlements(db, nightId)).filter(s => s.paidAt != null);
-  const transfers = settle(nightBalances(data.members.map(m => m.id), expenses, paid));
+  const all = await listSettlements(db, nightId);
+  const paid = all.filter(s => s.paidAt != null);
+  const net = nightBalances(data.members.map(m => m.id), expenses, paid);
+  // The plan people are already looking at stays put while it still squares everyone up.
+  if (stillSettles(net, all.filter(s => s.paidAt == null))) return;
+  const transfers = settle(net);
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM settlements WHERE night_id = ? AND paid_at IS NULL', nightId);
     for (const t of transfers) {
@@ -306,6 +389,29 @@ export async function generateSettlements(db: SQLiteDatabase, nightId: number): 
         nightId, t.fromId, t.toId, t.amount,
       );
     }
+  });
+}
+
+// Someone paid part of what they owe. The part is kept as its own paid payment and the row shrinks by it,
+// so the rest stays with the same person and nobody else's row changes.
+export async function payPart(db: SQLiteDatabase, settlementId: number, amount: number): Promise<void> {
+  const row = await db.getFirstAsync<{ night_id: number; from_id: number; to_id: number; amount_minor: number; paid_at: number | null }>(
+    'SELECT night_id, from_id, to_id, amount_minor, paid_at FROM settlements WHERE id = ?', settlementId,
+  );
+  if (!row || row.paid_at != null) throw new Error('That payment changed. Open Settle up again.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Enter how much they paid');
+  if (amount > row.amount_minor) throw new Error(`That's more than the ${formatMoney(row.amount_minor)} they owe`);
+  await assertOpen(db, row.night_id);
+  if (amount === row.amount_minor) {
+    await db.runAsync('UPDATE settlements SET paid_at = ? WHERE id = ?', Date.now(), settlementId);
+    return;
+  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'INSERT INTO settlements (night_id, from_id, to_id, amount_minor, paid_at) VALUES (?, ?, ?, ?, ?)',
+      row.night_id, row.from_id, row.to_id, amount, Date.now(),
+    );
+    await db.runAsync('UPDATE settlements SET amount_minor = amount_minor - ? WHERE id = ?', amount, settlementId);
   });
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
@@ -7,12 +7,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { balanceHistory } from '../../../core/balances';
 import { categoriesEmoji, categoriesLabel } from '../../../core/categories';
 import {
-  deleteExpense, getNight, listExpenses, listSettlements, renameNight, saveExpense,
+  deleteExpense, deleteNight, getNight, listExpenses, listSettlements, renameNight, reopenNight, saveExpense,
   type Expense, type ExpenseInput, type Night, type NightMember, type Settlement,
 } from '../../../db/repo';
 import { formatMoney as money } from '../../../core/money';
 import { Button } from '../../../ui/Button';
 import { Circled, Land, ScoreColumn, Strike } from '../../../ui/chalk';
+import { dropFile, dropNight } from '../../../photos/store';
 import { NameModal } from '../../../ui/NameModal';
 import { guarded } from '../../../ui/oops';
 import { Snackbar } from '../../../ui/Snackbar';
@@ -51,6 +52,7 @@ export default function NightScreen() {
   }, [db, nightId]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoring = useRef(false);
+  const undoReceipt = useRef<string | null>(null); // receipt of the payment waiting on Undo
   useFocusEffect(useCallback(() => {
     load();
     return () => {
@@ -75,7 +77,11 @@ export default function NightScreen() {
       timer.current = null;
       const gone = await guarded("Couldn't remove that", () => deleteExpense(db, e.id));
       setStriking(null);
-      if (gone) setUndo(gone);
+      if (gone) {
+        dropFile(undoReceipt.current); // a second removal replaces the first one's Undo
+        undoReceipt.current = gone.receiptUri ?? null;
+        setUndo(gone);
+      }
       load();
     }, 200);
   }
@@ -83,11 +89,39 @@ export default function NightScreen() {
     if (!undo || restoring.current) return;
     restoring.current = true;
     const snapshot = undo;
+    undoReceipt.current = null; // coming back: its receipt is needed again
     setUndo(null);
     const ok = await guarded("Couldn't bring that back", async () => { await saveExpense(db, snapshot); return true; });
     restoring.current = false;
     if (!ok) { setUndo(snapshot); return; }
     load();
+  }
+
+  async function reopen() {
+    await guarded("Couldn't reopen it", () => reopenNight(db, nightId));
+    load();
+  }
+
+  // Asks first: this removes every payment, settle-up tick and photo from the night, for good.
+  function removeNight() {
+    if (!night) return;
+    Alert.alert(
+      `Delete ${night.title}?`,
+      "Every payment, settle-up tick and photo from this night goes. This can't be undone.",
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const files = await guarded("Couldn't delete it", () => deleteNight(db, nightId));
+            if (!files) return;
+            dropNight(nightId, files);
+            router.dismissTo('/');
+          },
+        },
+      ],
+    );
   }
 
   async function rename(title: string) {
@@ -112,7 +146,12 @@ export default function NightScreen() {
       <FlatList
         data={[...expenses].reverse()}
         keyExtractor={e => String(e.id)}
-        contentContainerStyle={[styles.list, { paddingBottom: (ended ? 80 : PANEL_H + 24) + insets.bottom }]}
+        contentContainerStyle={[styles.list, { paddingBottom: (ended ? 150 : PANEL_H + 24) + insets.bottom }]}
+        ListFooterComponent={
+          <Tap onPress={removeNight} ring={theme.color.owes} style={styles.deleteNight} accessibilityRole="button" accessibilityLabel={`Delete ${night.title}`}>
+            <Text style={styles.deleteText}>Delete this night</Text>
+          </Tap>
+        }
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.kicker}>The tab</Text>
@@ -154,7 +193,7 @@ export default function NightScreen() {
                 <View style={styles.flex}>
                   <Text style={styles.expTitle} numberOfLines={1}>{title}</Text>
                   <Text style={styles.dim}>
-                    {payer?.name} paid{e.items.length ? ` · ${e.items.length} ${e.items.length === 1 ? 'item' : 'items'}` : ''}
+                    {payer?.name} paid{e.items.length ? ` · ${e.items.length} ${e.items.length === 1 ? 'item' : 'items'}` : ''}{e.receiptUri ? ' · receipt' : ''}
                   </Text>
                 </View>
                 {e.isTreat && (
@@ -175,9 +214,19 @@ export default function NightScreen() {
           <Button kind="go" label="Settle up" onPress={() => router.push(`/night/${nightId}/settle`)} />
         </View>
       )}
-      {ended && <Text style={[styles.closed, { bottom: 28 + insets.bottom }]}>All square. This night is closed.</Text>}
+      {ended && (
+        <View style={[styles.panel, { paddingBottom: PANEL_PAD + insets.bottom }]}>
+          <Text style={styles.closedText}>All square. This night is closed.</Text>
+          <Button kind="ghost" label="Reopen this night" onPress={reopen} />
+        </View>
+      )}
       <NameModal visible={naming} initial={night.title} onDone={rename} onClose={() => setNaming(false)} />
-      <Snackbar visible={undo != null} message="Removed" action="Undo" onAction={restore} onHide={() => setUndo(null)} bottomOffset={PANEL_H + 12} />
+      <Snackbar visible={undo != null} message="Removed" action="Undo" onAction={restore} onHide={() => {
+        // Undo is gone for good: the removed payment's receipt photo goes too.
+        dropFile(undoReceipt.current);
+        undoReceipt.current = null;
+        setUndo(null);
+      }} bottomOffset={PANEL_H + 12} />
     </View>
   );
 }
@@ -208,5 +257,7 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: PANEL_PAD, gap: PANEL_GAP,
     backgroundColor: theme.color.bg, borderTopWidth: 2, borderTopColor: theme.color.line,
   },
-  closed: { ...theme.type.label, position: 'absolute', alignSelf: 'center', color: theme.color.owed },
+  closedText: { ...theme.type.label, color: theme.color.owed, textAlign: 'center' },
+  deleteNight: { minHeight: theme.tap, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  deleteText: { ...theme.type.bodyBold, color: theme.color.owes },
 });

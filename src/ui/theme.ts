@@ -38,5 +38,5 @@ const type = {
 export const theme = { color, font, face, type, radius: { sm: 4, md: 6, lg: 10 }, tap: 56 };
 
 // Chalk-stick colours for each friend's avatar ring.
-export const CREW_COLORS = ['#C9E0DE', '#4AC777', '#F66D62', '#E8D27A', '#8CC3E8', '#E2A2C8', '#F0A86A', '#B9A6E8'];
+export const CREW_COLORS = ['#C9E0DE', '#4AC777', '#F66D62', '#E8D27A', '#9CB8EB', '#E2A2C8', '#F0A86A', '#B9A6E8'];
 export const CREW_EMOJI = ['🦊', '🐸', '🐙', '🦄', '🐯', '🐼', '🦖', '🐝', '🐧', '🦉', '🐳', '🌵'];
